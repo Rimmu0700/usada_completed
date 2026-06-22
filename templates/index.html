@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Premium Herbal AI Dashboard - Multi-Model Ensemble</title>
+    <title>Premium Herbal AI Dashboard - Multi-Model Evaluation</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -294,11 +294,6 @@
             animation: zoomIn 0.4s ease-out;
         }
 
-        .ensemble-box.accepted {
-            background: var(--success-bg);
-            border: 1px solid rgba(116, 198, 157, 0.3);
-        }
-
         .ensemble-box.rejected {
             background: var(--danger-bg);
             border: 1px solid rgba(255, 90, 95, 0.3);
@@ -312,10 +307,6 @@
             font-weight: 600;
             letter-spacing: 1px;
             text-transform: uppercase;
-        }
-
-        .verdict-header.accepted {
-            color: var(--success);
         }
 
         .verdict-header.rejected {
@@ -400,7 +391,7 @@
 
         .edu-grid {
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 1rem;
             margin-top: 1.5rem;
         }
@@ -615,14 +606,14 @@
 
             <div class="glass-card">
                 <div class="card-title">
-                    <span>🔬</span> Hasil Majority Ensemble Voting (3 Model)
+                    <span>🔬</span> Hasil Deteksi 3 Model Arsitektur
                 </div>
 
                 <div class="results-container display-results">
                     <div class="placeholder-box">
                         <span class="placeholder-icon">🍃</span>
                         <p>Unggah foto sampel daun herbal untuk menganalisis klasifikasi, tingkat kepercayaan, dan
-                            visualisasi spasial peta Grad-CAM.</p>
+                            visualisasi spasial peta Grad-CAM secara komparatif.</p>
                     </div>
                 </div>
             </div>
@@ -660,13 +651,6 @@
 
                     <div class="edu-step" onclick="activateStep(4)">
                         <span class="step-number">Langkah 4</span>
-                        <span class="step-title">Majority Voting</span>
-                        <span class="step-desc">Keputusan akhir diambil berdasarkan suara terbanyak dari ketiga model
-                            pintar tersebut untuk memastikan keakuratan tertinggi.</span>
-                    </div>
-
-                    <div class="edu-step" onclick="activateStep(5)">
-                        <span class="step-number">Langkah 5</span>
                         <span class="step-title">Grad-CAM</span>
                         <span class="step-desc">Pemetaan visual yang menyoroti area spesifik pada daun yang paling
                             mempengaruhi keputusan model konvolusi.</span>
@@ -709,11 +693,6 @@
                 tags: ["Transformer", "Self-Attention", "Global Context"]
             },
             4: {
-                title: "Ensemble Majority Voting",
-                desc: "Sistem tidak hanya bergantung pada satu otak buatan. Jika ResNet50 dan ViT mengenali gambar sebagai 'Daun Sirih', namun MobileNetV3 salah mengenalinya, sistem akan melakukan voting. Keputusan mayoritas inilah yang ditampilkan sebagai hasil akhir, mengurangi risiko kebingungan pada famili tumbuhan yang sangat mirip visualnya.",
-                tags: ["Ensemble Learning", "Majority Vote", "Error Correction"]
-            },
-            5: {
                 title: "Grad-CAM Saliency Mapping",
                 desc: "Grad-CAM (Gradient-weighted Class Activation Mapping) adalah teknik yang memvisualisasikan 'apa yang dilihat AI'. Area berwarna merah/panas pada gambar menunjukkan piksel spesifik (seperti ujung daun bergerigi atau urat tengah) yang paling memberikan bukti kuat bagi model konvolusi dalam menentukan kelas tanaman tersebut.",
                 tags: ["Explainable AI", "Saliency Map", "Visual Feedback"]
@@ -866,18 +845,16 @@
         }
 
         function renderResults(data) {
-            const ens = data.ensemble;
+            const status = data.global_status || data.ensemble;
             const models = data.models || {};
             let html = '';
 
-            if (ens.accepted) {
+            if (status.accepted) {
                 html += `
-      <div class="ensemble-box accepted">
-        <div class="verdict-header accepted">✅ Keputusan Mayoritas Tercapai</div>
-        <div class="leaf-name">${ens.display_name}</div>
-        <p class="ood-reason-text">Tingkat keyakinan agregat: ${(ens.confidence * 100).toFixed(1)}%</p>
+      <div style="margin-bottom: 1rem;">
+        <h3 style="font-size: 1.1rem; color: #ffffff;">Detail Kinerja Tiap Model:</h3>
+        <p style="font-size: 0.85rem; color: var(--text-muted);">Berikut adalah perbandingan hasil prediksi independen dari ketiga arsitektur.</p>
       </div>
-      <h3 style="font-size: 1rem; color: #fff; margin-top: 1rem;">Detail Kinerja Tiap Model:</h3>
       <div class="models-comparison">
     `;
 
@@ -914,7 +891,7 @@
       <div class="ensemble-box rejected">
         <div class="verdict-header rejected">❌ Deteksi Out-of-Distribution (OOD)</div>
         <div class="leaf-name">Objek Tidak Valid / Ditolak</div>
-        <p class="ood-reason-text">${ens.ood_reason}</p>
+        <p class="ood-reason-text">${status.ood_reason}</p>
       </div>
     `;
             }

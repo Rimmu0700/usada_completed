@@ -110,7 +110,7 @@ def predict():
                 m.eval()
                 loaded_models[m_name] = m
         if not loaded_models:
-            return jsonify({"ensemble": {"accepted": False, "ood_reason": "Kesalahan: Belum ada model yang dilatih"}, "models": {}}), 500
+            return jsonify({"global_status": {"accepted": False, "ood_reason": "Kesalahan: Belum ada model yang dilatih"}, "models": {}}), 500
 
     data = request.get_json()
     b64_str = data["image"].split(",")[1]
@@ -127,12 +127,12 @@ def predict():
     
     green_ratio = check_green_ratio(img_np)
     if green_ratio < 0.02:
-        return jsonify({"ensemble": {"accepted": False, "ood_reason": "Gambar ditolak. Komponen warna hijau terlalu rendah (< 2%)."}, "models": {}})
+        return jsonify({"global_status": {"accepted": False, "ood_reason": "Gambar ditolak. Komponen warna hijau terlalu rendah (< 2%)."}, "models": {}})
 
     img_rgb = cv2.cvtColor(img_np, cv2.COLOR_BGR2RGB)
     img_tensor = transform(img_rgb).unsqueeze(0).to(DEVICE)
     
-    response_data = {"ensemble": {}, "models": {}}
+    response_data = {"global_status": {}, "models": {}}
     predictions = []
     max_confidences = []
     
@@ -171,24 +171,18 @@ def predict():
         max_confidences.append(max_prob.item())
         
     if predictions:
-        counter = collections.Counter(predictions)
-        majority_class = counter.most_common(1)[0][0]
         avg_confidence = sum(max_confidences) / len(max_confidences)
-        
         if avg_confidence < 0.25:
-            response_data["ensemble"] = {
+            response_data["global_status"] = {
                 "accepted": False,
                 "ood_reason": "Gambar ditolak. Tingkat keyakinan rata-rata klasifikasi terlalu rendah."
             }
         else:
-            response_data["ensemble"] = {
-                "accepted": True,
-                "class": majority_class,
-                "display_name": majority_class.replace('_', ' '),
-                "confidence": avg_confidence
+            response_data["global_status"] = {
+                "accepted": True
             }
     else:
-        response_data["ensemble"] = {"accepted": False, "ood_reason": "Inferensi gagal pada semua model."}
+        response_data["global_status"] = {"accepted": False, "ood_reason": "Inferensi gagal pada semua model."}
 
     return jsonify(response_data)
 

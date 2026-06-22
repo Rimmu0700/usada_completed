@@ -138,36 +138,45 @@ def train_single_model(model_name: str) -> dict:
     params_m = sum(p.numel() for p in model.parameters()) / 1000000.0
     flops_g = {"resnet50": 4.14, "mobilenet": 0.06, "vit": 17.58}.get(model_name, 0.0)
     inf_ms = benchmark_inference(model)
+
+    dataset_state_current = {"classes": CLASS_NAMES, "counts": CLASS_RAW_COUNTS}
+    dataset_changed = False
     
     result_path = os.path.join(dirs["metrics_dir"], "train_result.json")
     if os.path.exists(result_path):
         with open(result_path, "r") as f:
             res = json.load(f)
-        hist = res.get("history", {})
-        if "val_acc" in hist and len(hist["val_acc"]) > 0:
-            res["best_val_acc"] = max(hist["val_acc"])
-            res["lowest_val_acc"] = min(hist["val_acc"])
-            res["avg_val_acc"] = round(float(np.mean(hist["val_acc"])), 4)
-            res["best_val_f1"] = max(hist["val_f1"])
-            res["lowest_val_f1"] = min(hist["val_f1"])
-            res["avg_val_f1"] = round(float(np.mean(hist["val_f1"])), 4)
-            res["avg_epoch_time_s"] = round(float(np.mean(hist["epoch_time_s"])), 2)
-            res["lowest_epoch_time_s"] = round(float(min(hist["epoch_time_s"])), 2)
-            res["peak_epoch_time_s"] = round(float(max(hist["epoch_time_s"])), 2)
-            res["avg_vram_mb"] = round(float(np.mean(hist["gpu_vram_mb"])), 2)
-            res["lowest_vram_mb"] = round(float(min(hist["gpu_vram_mb"])), 2)
-            res["peak_vram_mb"] = round(float(max(hist["gpu_vram_mb"])), 2)
-            res["params_m"] = round(params_m, 2)
-            res["flops_g"] = flops_g
-            res["inference_ms"] = round(inf_ms, 2)
-            with open(result_path, "w") as f:
-                json.dump(res, f, indent=4)
-            print(f"\nModel {display_name} sudah dilatih sebelumnya. Melewati proses training.")
-            del model
-            gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            return res
+        
+        old_dataset_state = res.get("dataset_state", None)
+        if old_dataset_state == dataset_state_current:
+            hist = res.get("history", {})
+            if "val_acc" in hist and len(hist["val_acc"]) > 0:
+                res["best_val_acc"] = max(hist["val_acc"])
+                res["lowest_val_acc"] = min(hist["val_acc"])
+                res["avg_val_acc"] = round(float(np.mean(hist["val_acc"])), 4)
+                res["best_val_f1"] = max(hist["val_f1"])
+                res["lowest_val_f1"] = min(hist["val_f1"])
+                res["avg_val_f1"] = round(float(np.mean(hist["val_f1"])), 4)
+                res["avg_epoch_time_s"] = round(float(np.mean(hist["epoch_time_s"])), 2)
+                res["lowest_epoch_time_s"] = round(float(min(hist["epoch_time_s"])), 2)
+                res["peak_epoch_time_s"] = round(float(max(hist["epoch_time_s"])), 2)
+                res["avg_vram_mb"] = round(float(np.mean(hist["gpu_vram_mb"])), 2)
+                res["lowest_vram_mb"] = round(float(min(hist["gpu_vram_mb"])), 2)
+                res["peak_vram_mb"] = round(float(max(hist["gpu_vram_mb"])), 2)
+                res["params_m"] = round(params_m, 2)
+                res["flops_g"] = flops_g
+                res["inference_ms"] = round(inf_ms, 2)
+                with open(result_path, "w") as f:
+                    json.dump(res, f, indent=4)
+                print(f"\nModel {display_name} sudah dilatih sebelumnya dengan dataset yang sama. Melewati proses training.")
+                del model
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                return res
+        else:
+            dataset_changed = True
+            print(f"\nPerubahan dataset terdeteksi pada {display_name}. Memulai pelatihan ulang dari awal.")
 
     train_loader, val_loader, _ = get_dataloaders(batch_size=batch_size)
 
@@ -199,7 +208,7 @@ def train_single_model(model_name: str) -> dict:
     if not os.path.exists(checkpoint_path):
         checkpoint_path = dirs["best_model_path"]
 
-    if os.path.exists(checkpoint_path):
+    if os.path.exists(checkpoint_path) and not dataset_changed:
         checkpoint = torch.load(checkpoint_path, map_location=DEVICE, weights_only=False)
         if "model_state" in checkpoint:
             model.load_state_dict(checkpoint["model_state"])
@@ -318,6 +327,7 @@ def train_single_model(model_name: str) -> dict:
         "params_m": round(params_m, 2),
         "flops_g": flops_g,
         "inference_ms": round(inf_ms, 2),
+        "dataset_state": dataset_state_current,
         "history": history,
         "gpu_info": get_gpu_info() if epoch >= start_epoch else {},
     }
