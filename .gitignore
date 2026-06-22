@@ -1,0 +1,15 @@
+venv/
+__pycache__/
+dataset_input/
+dataset_source/
+dataset_split/
+dataset_augmented/
+outputs/
+models/
+results/
+*.pth
+*.pt
+*.jpg
+*.jpeg
+*.png
+.DS_Store
