@@ -35,6 +35,23 @@ def build_class_weights() -> torch.Tensor:
     weights = weights / weights.sum()
     return weights.to(DEVICE)
 
+def benchmark_inference(model) -> float:
+    model.eval()
+    dummy_input = torch.randn(1, 3, 224, 224).to(DEVICE)
+    for _ in range(10):
+        with torch.no_grad(), torch.amp.autocast(device_type="cuda", enabled=torch.cuda.is_available()):
+            model(dummy_input)
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+    t0 = time.perf_counter()
+    for _ in range(50):
+        with torch.no_grad(), torch.amp.autocast(device_type="cuda", enabled=torch.cuda.is_available()):
+            model(dummy_input)
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+    t1 = time.perf_counter()
+    return ((t1 - t0) / 50) * 1000
+
 def train_one_epoch(model, loader, criterion, optimizer, scaler) -> dict:
     model.train()
     running_loss = 0.0
@@ -115,6 +132,13 @@ def train_single_model(model_name: str) -> dict:
     learning_rate = hp["learning_rate"]
     display_name = MODEL_INFO.get(model_name, {}).get("display_name", model_name)
     
+    model = build_model(model_name)
+    get_model_summary(model)
+    
+    params_m = sum(p.numel() for p in model.parameters()) / 1000000.0
+    flops_g = {"resnet50": 4.14, "mobilenet": 0.06, "vit": 17.58}.get(model_name, 0.0)
+    inf_ms = benchmark_inference(model)
+    
     result_path = os.path.join(dirs["metrics_dir"], "train_result.json")
     if os.path.exists(result_path):
         with open(result_path, "r") as f:
@@ -127,14 +151,25 @@ def train_single_model(model_name: str) -> dict:
             res["best_val_f1"] = max(hist["val_f1"])
             res["lowest_val_f1"] = min(hist["val_f1"])
             res["avg_val_f1"] = round(float(np.mean(hist["val_f1"])), 4)
+            res["avg_epoch_time_s"] = round(float(np.mean(hist["epoch_time_s"])), 2)
+            res["lowest_epoch_time_s"] = round(float(min(hist["epoch_time_s"])), 2)
+            res["peak_epoch_time_s"] = round(float(max(hist["epoch_time_s"])), 2)
+            res["avg_vram_mb"] = round(float(np.mean(hist["gpu_vram_mb"])), 2)
+            res["lowest_vram_mb"] = round(float(min(hist["gpu_vram_mb"])), 2)
+            res["peak_vram_mb"] = round(float(max(hist["gpu_vram_mb"])), 2)
+            res["params_m"] = round(params_m, 2)
+            res["flops_g"] = flops_g
+            res["inference_ms"] = round(inf_ms, 2)
             with open(result_path, "w") as f:
                 json.dump(res, f, indent=4)
             print(f"\nModel {display_name} sudah dilatih sebelumnya. Melewati proses training.")
+            del model
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             return res
 
     train_loader, val_loader, _ = get_dataloaders(batch_size=batch_size)
-    model = build_model(model_name)
-    get_model_summary(model)
 
     if USE_CLASS_WEIGHTED_LOSS:
         class_weights = build_class_weights()
@@ -253,8 +288,12 @@ def train_single_model(model_name: str) -> dict:
     best_val_f1 = max(history['val_f1'])
     lowest_val_f1 = min(history['val_f1'])
     avg_val_f1 = float(np.mean(history['val_f1']))
+    avg_time = float(np.mean(history['epoch_time_s']))
+    lowest_time = float(min(history['epoch_time_s']))
+    peak_time = float(max(history['epoch_time_s']))
     avg_vram = float(np.mean(history['gpu_vram_mb']))
     peak_vram = float(max(history['gpu_vram_mb']))
+    lowest_vram = float(min(history['gpu_vram_mb']))
 
     result_json = {
         "model_name": model_name,
@@ -263,7 +302,6 @@ def train_single_model(model_name: str) -> dict:
         "learning_rate": learning_rate,
         "total_epochs_run": epoch,
         "total_time_s": round(total_time, 2),
-        "avg_epoch_time_s": epoch_timer.average() if epoch >= start_epoch else 0,
         "best_val_loss": best_val_loss,
         "best_val_acc": best_val_acc,
         "lowest_val_acc": lowest_val_acc,
@@ -271,8 +309,15 @@ def train_single_model(model_name: str) -> dict:
         "best_val_f1": best_val_f1,
         "lowest_val_f1": lowest_val_f1,
         "avg_val_f1": round(avg_val_f1, 4),
+        "avg_epoch_time_s": round(avg_time, 2),
+        "lowest_epoch_time_s": round(lowest_time, 2),
+        "peak_epoch_time_s": round(peak_time, 2),
         "avg_vram_mb": round(avg_vram, 2),
+        "lowest_vram_mb": round(lowest_vram, 2),
         "peak_vram_mb": peak_vram,
+        "params_m": round(params_m, 2),
+        "flops_g": flops_g,
+        "inference_ms": round(inf_ms, 2),
         "history": history,
         "gpu_info": get_gpu_info() if epoch >= start_epoch else {},
     }
@@ -295,21 +340,34 @@ def train_all_models():
         result = train_single_model(model_name)
         all_results[model_name] = result
 
-    header = f"{'Model':20s}{'Best Acc':>10s}{'Avg Acc':>10s}{'Low Acc':>10s}{'Best F1':>10s}{'Avg F1':>10s}{'Low F1':>10s}{'Peak VRAM':>12s}"
-    print(f"\n{header}")
-    print("-" * len(header))
+    print(f"\n{'='*130}")
+    print(f"{'Model':18s} | {'Akurasi (Best/Avg/Low)':<23s} | {'F1 (Best/Avg/Low)':<23s} | {'Waktu/Epc (Avg/Low)':<20s} | {'VRAM (Peak/Avg/Low)':<20s}")
+    print(f"{'-'*130}")
     for model_name, res in all_results.items():
         display_name = MODEL_INFO.get(model_name, {}).get("display_name", model_name)
-        print(
-            f"{display_name:20s}"
-            f"{res.get('best_val_acc', 0):>10.4f}"
-            f"{res.get('avg_val_acc', 0):>10.4f}"
-            f"{res.get('lowest_val_acc', 0):>10.4f}"
-            f"{res.get('best_val_f1', 0):>10.4f}"
-            f"{res.get('avg_val_f1', 0):>10.4f}"
-            f"{res.get('lowest_val_f1', 0):>10.4f}"
-            f"{res.get('peak_vram_mb', 0):>12.1f}"
-        )
+        acc_b = res.get('best_val_acc', 0) * 100
+        acc_a = res.get('avg_val_acc', 0) * 100
+        acc_l = res.get('lowest_val_acc', 0) * 100
+        f1_b = res.get('best_val_f1', 0) * 100
+        f1_a = res.get('avg_val_f1', 0) * 100
+        f1_l = res.get('lowest_val_f1', 0) * 100
+        trn_a = res.get('avg_epoch_time_s', 0)
+        trn_l = res.get('lowest_epoch_time_s', 0)
+        vrm_p = res.get('peak_vram_mb', 0)
+        vrm_a = res.get('avg_vram_mb', 0)
+        vrm_l = res.get('lowest_vram_mb', 0)
+        print(f"{display_name:18s} | {acc_b:>5.1f}% / {acc_a:>5.1f}% / {acc_l:>5.1f}% | {f1_b:>5.1f}% / {f1_a:>5.1f}% / {f1_l:>5.1f}% | {trn_a:>6.1f}s / {trn_l:>5.1f}s     | {vrm_p:>5.0f} / {vrm_a:>4.0f} / {vrm_l:>4.0f} MB")
+    
+    print(f"\n{'='*75}")
+    print(f"{'Model':18s} | {'Inference (ms)':<15s} | {'FLOPs (G)':<15s} | {'Params (M)':<15s}")
+    print(f"{'-'*75}")
+    for model_name, res in all_results.items():
+        display_name = MODEL_INFO.get(model_name, {}).get("display_name", model_name)
+        inf_t = res.get('inference_ms', 0)
+        flops = res.get('flops_g', 0)
+        params = res.get('params_m', 0)
+        print(f"{display_name:18s} | {inf_t:<15.2f} | {flops:<15.2f} | {params:<15.2f}")
+    print(f"{'='*75}")
 
     from config import COMPARISON_DIR
     Path(COMPARISON_DIR).mkdir(parents=True, exist_ok=True)
