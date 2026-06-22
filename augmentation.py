@@ -1,18 +1,3 @@
-"""
-augmentation.py
-===============
-Langkah 2: Augmentasi HANYA pada data training.
-
-Tidak terkait pemilihan model — dataset_augmented/train/ yang dihasilkan
-di sini dipakai BERSAMA oleh ResNet50, MobileNetV3-Small, dan ViT-Base/16,
-sehingga ketiga model dilatih dari data training yang IDENTIK.
-
-AUGMENTASI PROPORSIONAL:
-  multiplier_kelas = TARGET_TRAIN_PER_CLASS / jumlah_gambar_train_kelas
-  → kelas dengan data lebih sedikit otomatis mendapat multiplier lebih besar,
-    sehingga hasil akhir tiap kelas mendekati jumlah yang setara.
-"""
-
 import os
 import math
 import random
