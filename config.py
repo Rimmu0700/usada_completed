@@ -48,8 +48,27 @@ if os.path.exists(DATA_SOURCE):
     CLASS_NAMES = sorted([d for d in os.listdir(DATA_SOURCE) if os.path.isdir(os.path.join(DATA_SOURCE, d)) and not d.startswith('.')])
     CLASS_RAW_COUNTS = [len([f for f in os.listdir(os.path.join(DATA_SOURCE, c)) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) for c in CLASS_NAMES]
 else:
-    CLASS_NAMES = []
-    CLASS_RAW_COUNTS = []
+    CLASS_NAMES = [
+        "Alpinia galanga(L) wild.(Zingiberaceae)",
+        "Blumea balsamifera (L) DC.",
+        "Cinnamomum verum J.Presl",
+        "Curcuma sylvatica vahl (Zingiberaceae)",
+        "Erythrina hypaphorus Boerl. ex Koord.",
+        "Euchresta horsfieldii (Lesch.) Benn.",
+        "Graptophyllum pictum (L.) Griff.",
+        "Justicia gendarussa Burm.f.",
+        "Piper betle L.",
+        "Symphytum officinale L.(boraginaceae)",
+        "Tabernaemontana sp.",
+        "Zingiber Purpureum Roxb",
+        "Zingiber officinale Roxb",
+        "amomum compactum sol.ex manton",
+        "anredera cordifolia (ten) steenis",
+        "antidesma bunius (L.) Spreng.",
+        "plantago major L(plantaginaceae)"
+    ]
+    CLASS_NAMES = sorted(CLASS_NAMES)
+    CLASS_RAW_COUNTS = [400] * len(CLASS_NAMES)
 
 NUM_CLASSES = len(CLASS_NAMES)
 CLASS_TO_IDX = {name: idx for idx, name in enumerate(CLASS_NAMES)}
