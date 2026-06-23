@@ -49,8 +49,9 @@ if os.path.exists(DATA_SOURCE):
     CLASS_RAW_COUNTS = [len([f for f in os.listdir(os.path.join(DATA_SOURCE, c)) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) for c in CLASS_NAMES]
 else:
     CLASS_NAMES = [
-        "Alpinia galanga(L) wild.(Zingiberaceae)",
-        "Blumea balsamifera (L) DC.",
+        "Alpinia galanga(L) willd.(angiberaceae)",
+        "Antidesma bunius (L.) Spreng.",
+        "Blumea balsamifera (L.) DC.",
         "Cinnamomum verum J.Presl",
         "Curcuma sylvatica vahl (Zingiberaceae)",
         "Erythrina hypaphorus Boerl. ex Koord.",
@@ -64,7 +65,6 @@ else:
         "Zingiber officinale Roxb",
         "amomum compactum sol.ex manton",
         "anredera cordifolia (ten) steenis",
-        "antidesma bunius (L.) Spreng.",
         "plantago major L(plantaginaceae)"
     ]
     CLASS_NAMES = sorted(CLASS_NAMES)
