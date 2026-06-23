@@ -1,0 +1,164 @@
+{
+    "resnet50": {
+        "model": "resnet50",
+        "display_name": "ResNet50",
+        "image_size": "224x224",
+        "num_classes": 17,
+        "accuracy": 1.0,
+        "f1_macro": 1.0,
+        "f1_per_class": {
+            "Alpinia galanga(L) willd.(angiberaceae)": 1.0,
+            "Antidesma bunius (L.) Spreng.": 1.0,
+            "Blumea balsamifera (L.) DC.": 1.0,
+            "Cinnamomum verum J.Presl": 1.0,
+            "Curcuma sylvatica vahl (Zingiberaceae)": 1.0,
+            "Erythrina hypaphorus Boerl. ex Koord.": 1.0,
+            "Euchresta horsfieldii (Lesch.) Benn.": 1.0,
+            "Graptophyllum pictum (L.) Griff.": 1.0,
+            "Justicia gendarussa Burm.f.": 1.0,
+            "Piper betle L.": 1.0,
+            "Symphytum officinale L.(boraginaceae)": 1.0,
+            "Tabernaemontana sp.": 1.0,
+            "Zingiber Purpureum Roxb": 1.0,
+            "Zingiber officinale Roxb": 1.0,
+            "amomum compactum sol.ex manton": 1.0,
+            "anredera cordifolia (ten) steenis": 1.0,
+            "plantago major L(plantaginaceae)": 1.0
+        },
+        "inference_time_ms": {
+            "mean_ms": 7.737,
+            "std_ms": 0.357,
+            "min_ms": 7.583,
+            "max_ms": 10.77,
+            "n_runs": 100
+        },
+        "gpu_vram_peak_mb": 112.64,
+        "flops": {
+            "flops_raw": null,
+            "flops_str": "N/A (install thop: pip install thop)",
+            "params_raw": 24565841,
+            "params_str": "24.57M",
+            "params_M": 24.57,
+            "method": "manual_param_count"
+        },
+        "gpu_info": {
+            "available": true,
+            "device_name": "NVIDIA GeForce RTX 2050",
+            "cuda_version": "13.0",
+            "cudnn_version": 92000,
+            "total_vram_gb": 3.68,
+            "sm_count": 16,
+            "cuda_cores_est": 2048,
+            "compute_cap": "8.6",
+            "pytorch_version": "2.12.1+cu130"
+        }
+    },
+    "mobilenet": {
+        "model": "mobilenet",
+        "display_name": "MobileNetV3-Small",
+        "image_size": "224x224",
+        "num_classes": 17,
+        "accuracy": 0.990431,
+        "f1_macro": 0.99068,
+        "f1_per_class": {
+            "Alpinia galanga(L) willd.(angiberaceae)": 1.0,
+            "Antidesma bunius (L.) Spreng.": 1.0,
+            "Blumea balsamifera (L.) DC.": 1.0,
+            "Cinnamomum verum J.Presl": 1.0,
+            "Curcuma sylvatica vahl (Zingiberaceae)": 1.0,
+            "Erythrina hypaphorus Boerl. ex Koord.": 1.0,
+            "Euchresta horsfieldii (Lesch.) Benn.": 1.0,
+            "Graptophyllum pictum (L.) Griff.": 1.0,
+            "Justicia gendarussa Burm.f.": 0.956522,
+            "Piper betle L.": 1.0,
+            "Symphytum officinale L.(boraginaceae)": 0.969697,
+            "Tabernaemontana sp.": 1.0,
+            "Zingiber Purpureum Roxb": 0.962963,
+            "Zingiber officinale Roxb": 1.0,
+            "amomum compactum sol.ex manton": 0.952381,
+            "anredera cordifolia (ten) steenis": 1.0,
+            "plantago major L(plantaginaceae)": 1.0
+        },
+        "inference_time_ms": {
+            "mean_ms": 3.087,
+            "std_ms": 0.106,
+            "min_ms": 2.993,
+            "max_ms": 3.517,
+            "n_runs": 100
+        },
+        "gpu_vram_peak_mb": 13.88,
+        "flops": {
+            "flops_raw": null,
+            "flops_str": "N/A (install thop: pip install thop)",
+            "params_raw": 1079089,
+            "params_str": "1.08M",
+            "params_M": 1.08,
+            "method": "manual_param_count"
+        },
+        "gpu_info": {
+            "available": true,
+            "device_name": "NVIDIA GeForce RTX 2050",
+            "cuda_version": "13.0",
+            "cudnn_version": 92000,
+            "total_vram_gb": 3.68,
+            "sm_count": 16,
+            "cuda_cores_est": 2048,
+            "compute_cap": "8.6",
+            "pytorch_version": "2.12.1+cu130"
+        }
+    },
+    "vit": {
+        "model": "vit",
+        "display_name": "ViT-Base/16",
+        "image_size": "224x224",
+        "num_classes": 17,
+        "accuracy": 0.990431,
+        "f1_macro": 0.990954,
+        "f1_per_class": {
+            "Alpinia galanga(L) willd.(angiberaceae)": 1.0,
+            "Antidesma bunius (L.) Spreng.": 1.0,
+            "Blumea balsamifera (L.) DC.": 1.0,
+            "Cinnamomum verum J.Presl": 1.0,
+            "Curcuma sylvatica vahl (Zingiberaceae)": 1.0,
+            "Erythrina hypaphorus Boerl. ex Koord.": 1.0,
+            "Euchresta horsfieldii (Lesch.) Benn.": 1.0,
+            "Graptophyllum pictum (L.) Griff.": 1.0,
+            "Justicia gendarussa Burm.f.": 1.0,
+            "Piper betle L.": 1.0,
+            "Symphytum officinale L.(boraginaceae)": 0.969697,
+            "Tabernaemontana sp.": 1.0,
+            "Zingiber Purpureum Roxb": 0.96,
+            "Zingiber officinale Roxb": 0.96,
+            "amomum compactum sol.ex manton": 1.0,
+            "anredera cordifolia (ten) steenis": 0.956522,
+            "plantago major L(plantaginaceae)": 1.0
+        },
+        "inference_time_ms": {
+            "mean_ms": 22.859,
+            "std_ms": 0.401,
+            "min_ms": 22.232,
+            "max_ms": 24.076,
+            "n_runs": 100
+        },
+        "gpu_vram_peak_mb": 346.07,
+        "flops": {
+            "flops_raw": null,
+            "flops_str": "N/A (install thop: pip install thop)",
+            "params_raw": 85999889,
+            "params_str": "86.00M",
+            "params_M": 86.0,
+            "method": "manual_param_count"
+        },
+        "gpu_info": {
+            "available": true,
+            "device_name": "NVIDIA GeForce RTX 2050",
+            "cuda_version": "13.0",
+            "cudnn_version": 92000,
+            "total_vram_gb": 3.68,
+            "sm_count": 16,
+            "cuda_cores_est": 2048,
+            "compute_cap": "8.6",
+            "pytorch_version": "2.12.1+cu130"
+        }
+    }
+}

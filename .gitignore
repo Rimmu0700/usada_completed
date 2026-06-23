@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+dataset_input/
+dataset_source/
+dataset_split/
+dataset_augmented/
+results/
+.DS_Store
+*final_model.pth

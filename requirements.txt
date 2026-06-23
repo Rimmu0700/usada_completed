@@ -1,0 +1,12 @@
+flask
+werkzeug
+numpy>=1.24.0
+Pillow>=10.0.0
+scikit-learn>=1.3.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+thop>=0.1.1
+tqdm>=4.65.0
+gunicorn>=20.1.0
+opencv-python
+timm
