@@ -7,3 +7,4 @@ dataset_augmented/
 results/
 .DS_Store
 *final_model.pth
+*.png
