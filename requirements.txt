@@ -24,3 +24,5 @@ thop>=0.1.1
 
 # Utilitas
 tqdm>=4.65.0
+
+gunicorn>=20.1.0
