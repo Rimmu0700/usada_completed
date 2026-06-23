@@ -1,9 +1,16 @@
 import os
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
 import time
 import base64
 import collections
 from flask import Flask, request, jsonify, render_template
 import torch
+torch.set_num_threads(1)
 import torch.nn.functional as F
 import numpy as np
 import cv2
@@ -76,9 +83,10 @@ def generate_saliency_map(model, img_tensor, predicted_class_idx, original_img_n
         return None
     img_tensor_copy = img_tensor.clone().detach().requires_grad_(True)
     model.zero_grad()
-    outputs = model(img_tensor_copy)
-    score = outputs[0][predicted_class_idx]
-    score.backward()
+    with torch.enable_grad():
+        outputs = model(img_tensor_copy)
+        score = outputs[0][predicted_class_idx]
+        score.backward()
     saliency, _ = torch.max(img_tensor_copy.grad.data.abs(), dim=1)
     saliency = saliency.squeeze().cpu().numpy()
     saliency = (saliency - saliency.min()) / (saliency.max() - saliency.min() + 1e-8)
