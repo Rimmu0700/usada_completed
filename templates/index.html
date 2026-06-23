@@ -794,6 +794,22 @@
             reader.readAsDataURL(file);
         }
 
+        // ─── Resize & compress gambar di browser sebelum dikirim ke server ───
+        async function getResizedImage(base64Str) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.src = base64Str;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 300;  // Resize drastis ke 300px
+                    canvas.height = 300;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, 300, 300);
+                    resolve(canvas.toDataURL('image/jpeg', 0.7)); // Kompres kualitas 70%
+                };
+            });
+        }
+
         predictBtn.addEventListener('click', async () => {
             if (!selectedFile) return;
 
@@ -809,11 +825,16 @@
   `;
 
             try {
-                const b64 = await fileToBase64(selectedFile);
+                // Ambil base64 asli dari file yang dipilih
+                const originalBase64 = await fileToBase64(selectedFile);
+
+                // Kecilkan gambar di browser sebelum dikirim ke server
+                const smallImage = await getResizedImage(originalBase64);
+
                 const resp = await fetch('/predict', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: b64 })
+                    body: JSON.stringify({ image: smallImage })
                 });
 
                 if (!resp.ok) {
