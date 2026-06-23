@@ -25,6 +25,8 @@ for m_name in MODEL_LIST:
         else:
             m.load_state_dict(checkpoint)
         m.eval()
+        for param in m.parameters():
+            param.requires_grad = False
         loaded_models[m_name] = m
 
 transform = transforms.Compose([
@@ -108,6 +110,8 @@ def predict():
                 else:
                     m.load_state_dict(checkpoint)
                 m.eval()
+                for param in m.parameters():
+                    param.requires_grad = False
                 loaded_models[m_name] = m
         if not loaded_models:
             return jsonify({"global_status": {"accepted": False, "ood_reason": "Kesalahan: Belum ada model yang dilatih"}, "models": {}}), 500
@@ -137,11 +141,10 @@ def predict():
     max_confidences = []
     
     for m_name, model in loaded_models.items():
-        for param in model.parameters():
-            param.requires_grad = True
-        
         t0 = time.time()
-        outputs = model(img_tensor)
+        with torch.no_grad():
+            outputs = model(img_tensor)
+            
         inference_ms = (time.time() - t0) * 1000
         
         probs = F.softmax(outputs, dim=1)[0]
