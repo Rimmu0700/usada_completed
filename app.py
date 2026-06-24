@@ -88,8 +88,8 @@ def predict():
     img_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     
     green_ratio = check_green_ratio(img_np)
-    if green_ratio < 0.02:
-        return jsonify({"global_status": {"accepted": False, "ood_reason": "Gambar ditolak. Komponen warna hijau terlalu rendah (< 2%)."}, "models": {}})
+    if green_ratio < 0.15:
+        return jsonify({"global_status": {"accepted": False, "ood_reason": "Gambar ditolak. Objek bukan daun (komponen warna hijau kurang dari 15%)."}, "models": {}})
 
     img_rgb = cv2.cvtColor(img_np, cv2.COLOR_BGR2RGB)
     img_tensor = transform(img_rgb).unsqueeze(0).to(DEVICE)
