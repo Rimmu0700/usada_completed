@@ -1,39 +1,21 @@
-"""
-inference.py
-============
-Melakukan prediksi pada SATU gambar tanaman menggunakan salah satu dari
-3 model terlatih: ResNet50, MobileNetV3-Small, atau ViT-Base/16.
-
-Alur:
-  Path gambar (JPG)
-  → Baca dengan PIL
-  → Resize 224×224
-  → ToTensor + Normalize
-  → Tambah dimensi batch: (1, 3, 224, 224)
-  → .to(GPU)
-  → Forward pass (model yang dipilih)
-  → Softmax → probabilitas per kelas
-  → Tampilkan prediksi + confidence
-
-Penggunaan:
-    python inference.py path/ke/gambar.jpg                  → default: resnet50
-    python inference.py path/ke/gambar.jpg --model mobilenet
-    python inference.py path/ke/gambar.jpg --model vit
-    python inference.py path/ke/gambar.jpg --model all       → bandingkan ketiganya
-"""
-
 import os
 import sys
 import time
-import argparse
 import torch
 import torch.nn as nn
-from PIL import Image
 import torchvision.transforms as T
+from PIL import Image
+import numpy as np
 
-from config import DEVICE, CLASS_NAMES, IDX_TO_CLASS, IMAGE_SIZE, MEAN, STD, MODEL_LIST, MODEL_INFO, get_output_dirs
+# --- Import YOLO dari ultralytics ---
+from ultralytics import YOLO
+
+# Import variabel dari config
+from config import DEVICE, CLASS_NAMES, IDX_TO_CLASS, IMAGE_SIZE, MEAN, STD, MODEL_LIST, get_output_dirs, YOLO_WEIGHTS_PATH, YOLO_CONF_THRESHOLD
 from model import build_model
 
+# Inisialisasi model YOLO dari config
+yolo_model = YOLO(YOLO_WEIGHTS_PATH)
 
 inference_transform = T.Compose([
     T.Resize((IMAGE_SIZE, IMAGE_SIZE)),
@@ -41,39 +23,47 @@ inference_transform = T.Compose([
     T.Normalize(mean=MEAN, std=STD),
 ])
 
-
 def load_model_for_inference(model_name: str) -> nn.Module:
-    """Memuat model terbaik (sesuai model_name) untuk inferensi."""
     dirs = get_output_dirs(model_name)
-    model = build_model(model_name)
-
-    if not os.path.exists(dirs["best_model_path"]):
-        raise FileNotFoundError(
-            f"Model '{model_name}' tidak ditemukan: {dirs['best_model_path']}\n"
-            f"Jalankan: python train.py  (pastikan '{model_name}' ada di MODEL_LIST config.py)"
-        )
-
-    checkpoint = torch.load(dirs["best_model_path"], map_location=DEVICE)
-    model.load_state_dict(checkpoint["model_state"])
+    checkpoint_path = dirs["best_model_path"]
+    
+    if not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(f"Checkpoint untuk {model_name} tidak ditemukan di: {checkpoint_path}")
+        
+    num_classes = len(CLASS_NAMES)
+    model = build_model(model_name, num_classes)
+    
+    checkpoint = torch.load(checkpoint_path, map_location=DEVICE)
+    if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+        model.load_state_dict(checkpoint["model_state_dict"])
+    else:
+        model.load_state_dict(checkpoint)
+        
+    model.to(DEVICE)
     model.eval()
-
-    display_name = MODEL_INFO.get(model_name, {}).get("display_name", model_name)
-    print(f"[INFERENCE] Model '{display_name}' dimuat. Val acc: {checkpoint.get('val_acc', float('nan')):.4f}")
     return model
 
-
 def predict_single_image(model: nn.Module, image_path: str) -> dict:
-    """
-    Prediksi spesies tanaman dari satu file gambar menggunakan model yang diberikan.
-
-    Return:
-        dict berisi predicted_class, confidence, all_probs, inference_ms
-    """
     if not os.path.exists(image_path):
         raise FileNotFoundError(f"Gambar tidak ditemukan: {image_path}")
 
     img = Image.open(image_path).convert("RGB")
     original_size = img.size
+
+    # --- Deteksi Area Daun dengan YOLO ---
+    img_np = np.array(img)
+    yolo_results = yolo_model(img_np, conf=YOLO_CONF_THRESHOLD, verbose=False)
+    boxes = yolo_results[0].boxes
+    
+    if len(boxes) > 0:
+        box = boxes[0].xyxy[0].cpu().numpy()
+        x1, y1, x2, y2 = map(int, box)
+        cropped_img_np = img_np[y1:y2, x1:x2]
+        img = Image.fromarray(cropped_img_np)
+        yolo_status = f"Terdeteksi Daun (Crop: {img.size[0]}x{img.size[1]})"
+    else:
+        yolo_status = "Daun tidak ditemukan oleh YOLO (Menggunakan Gambar Penuh)"
+    # -------------------------------------
 
     tensor = inference_transform(img).unsqueeze(0).to(DEVICE)
 
@@ -115,81 +105,45 @@ def predict_single_image(model: nn.Module, image_path: str) -> dict:
         "confidence":    round(confidence * 100, 2),
         "inference_ms":  round(inference_ms, 3),
         "all_probs_%":   all_probs_sorted,
+        "yolo_status":   yolo_status
     }
 
-
 def print_prediction(result: dict, display_name: str = ""):
-    """Tampilkan hasil prediksi secara terformat."""
-    print("\n" + "=" * 55)
-    title = f"HASIL PREDIKSI — {display_name}" if display_name else "HASIL PREDIKSI TANAMAN OBAT"
+    print("\n" + "=" * 60)
+    title = f"HASIL PREDIKSI SISTEM — {display_name}" if display_name else "HASIL PREDIKSI DAUN OBAT"
     print(title)
-    print("=" * 55)
-    print(f"  Gambar        : {os.path.basename(result['image_path'])}")
-    print(f"  Ukuran asli   : {result['original_size']}")
-    print(f"  Diproses sbg  : {result['input_size']} px")
-    print(f"  Prediksi      : {result['predicted']}")
+    print("=" * 60)
+    print(f"  Nama File     : {os.path.basename(result['image_path'])}")
+    print(f"  Ukuran Asli   : {result['original_size'][0]}x{result['original_size'][1]} px")
+    print(f"  Sistem YOLO11 : {result['yolo_status']}")
+    print(f"  Ukuran Klasif : {result['input_size']}")
+    print(f"  Hasil Prediksi: {result['predicted']}")
     print(f"  Confidence    : {result['confidence']:.2f}%")
-    print(f"  Inference time: {result['inference_ms']:.3f} ms")
-    print("\nProbabilitas semua kelas:")
+    print(f"  Waktu Proses  : {result['inference_ms']:.3f} ms")
+    print("-" * 60)
+    print("Probabilitas Distribusi Kelas:")
     for cls, prob in result["all_probs_%"].items():
         bar = "█" * int(prob / 5)
-        mark = " ← PREDIKSI" if cls == result["predicted"] else ""
-        print(f"  {cls:28s}: {prob:6.2f}% {bar}{mark}")
-    print("=" * 55)
+        mark = " [TERPILIH]" if cls == result["predicted"] else ""
+        print(f"  {cls:25s}: {prob:6.2f}% {bar}{mark}")
+    print("=" * 60)
 
-
-def predict_with_all_models(image_path: str):
-    """Jalankan prediksi dengan SEMUA model di MODEL_LIST, lalu tampilkan perbandingan."""
-    results = {}
-
-    for model_name in MODEL_LIST:
-        display_name = MODEL_INFO.get(model_name, {}).get("display_name", model_name)
-        try:
-            model  = load_model_for_inference(model_name)
-            result = predict_single_image(model, image_path)
-            print_prediction(result, display_name)
-            results[model_name] = result
-
-            del model
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-        except FileNotFoundError as e:
-            print(f"\n[SKIP] {display_name}: {e}")
-
-    if len(results) > 1:
-        print("\n\n" + "=" * 70)
-        print("PERBANDINGAN PREDIKSI ANTAR MODEL")
-        print("=" * 70)
-        header = f"{'Model':22s}{'Prediksi':25s}{'Confidence':>12s}{'Inf.Time(ms)':>14s}"
-        print(header)
-        print("-" * len(header))
-        for model_name, res in results.items():
-            display_name = MODEL_INFO.get(model_name, {}).get("display_name", model_name)
-            print(f"{display_name:22s}{res['predicted']:25s}{res['confidence']:>11.2f}%{res['inference_ms']:>14.3f}")
-
-        predictions = [r["predicted"] for r in results.values()]
-        if len(set(predictions)) == 1:
-            print(f"\n[KONSENSUS] Semua model sepakat: {predictions[0]}")
-        else:
-            print(f"\n[BERBEDA] Model tidak sepakat — perlu verifikasi manual.")
-
-
-# ==============================================================
-# MAIN
-# ==============================================================
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Prediksi spesies tanaman obat dari satu gambar.")
-    parser.add_argument("image_path", help="Path ke file gambar (.jpg/.png)")
-    parser.add_argument(
-        "--model", default="resnet50", choices=MODEL_LIST + ["all"],
-        help="Model yang dipakai: resnet50 (default), mobilenet, vit, atau 'all' untuk bandingkan ketiganya"
-    )
-    args = parser.parse_args()
-
-    if args.model == "all":
-        predict_with_all_models(args.image_path)
-    else:
-        display_name = MODEL_INFO.get(args.model, {}).get("display_name", args.model)
-        model  = load_model_for_inference(args.model)
-        result = predict_single_image(model, args.image_path)
-        print_prediction(result, display_name)
+    if len(sys.argv) < 3:
+        print("Penggunaan: python inference.py <nama_model> <path_gambar>")
+        print(f"Pilihan model: {MODEL_LIST}")
+        sys.exit(1)
+        
+    m_name = sys.argv[1]
+    img_path = sys.argv[2]
+    
+    if m_name not in MODEL_LIST:
+        print(f"Model tidak dikenal. Pilih salah satu dari: {MODEL_LIST}")
+        sys.exit(1)
+        
+    try:
+        model = load_model_for_inference(m_name)
+        res = predict_single_image(model, img_path)
+        print_prediction(res, display_name=m_name.upper())
+    except Exception as e:
+        print(f"Terjadi kesalahan saat inferensi: {str(e)}")

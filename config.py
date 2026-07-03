@@ -1,7 +1,11 @@
 import torch
 import os
 
+# ==============================================================================
+# 1. KONFIGURASI DIREKTORI & PATH
+# ==============================================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 DATA_SOURCE = os.path.join(BASE_DIR, "dataset_source")
 DATA_SPLIT = os.path.join(BASE_DIR, "dataset_split")
 DATA_AUGMENTED = os.path.join(BASE_DIR, "dataset_augmented")
@@ -11,6 +15,9 @@ VAL_DIR = os.path.join(DATA_SPLIT, "val")
 TEST_DIR = os.path.join(DATA_SPLIT, "test")
 AUG_TRAIN_DIR = os.path.join(DATA_AUGMENTED, "train")
 
+# ==============================================================================
+# 2. KONFIGURASI MODEL & OUTPUT
+# ==============================================================================
 MODEL_LIST = ["resnet50", "mobilenet", "vit"]
 
 MODEL_INFO = {
@@ -44,28 +51,31 @@ FINAL_MODEL_PATH = _default_dirs["final_model_path"]
 
 COMPARISON_DIR = os.path.join(OUTPUT_ROOT, "comparison")
 
+# ==============================================================================
+# 3. KONFIGURASI DATASET & KELAS (DAUN OBAT)
+# ==============================================================================
 if os.path.exists(DATA_SOURCE):
     CLASS_NAMES = sorted([d for d in os.listdir(DATA_SOURCE) if os.path.isdir(os.path.join(DATA_SOURCE, d)) and not d.startswith('.')])
     CLASS_RAW_COUNTS = [len([f for f in os.listdir(os.path.join(DATA_SOURCE, c)) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) for c in CLASS_NAMES]
 else:
     CLASS_NAMES = [
-        "Alpinia galanga(L) willd.(angiberaceae)",
-        "Antidesma bunius (L.) Spreng.",
-        "Blumea balsamifera (L.) DC.",
-        "Cinnamomum verum J.Presl",
-        "Curcuma sylvatica vahl (Zingiberaceae)",
-        "Erythrina hypaphorus Boerl. ex Koord.",
-        "Euchresta horsfieldii (Lesch.) Benn.",
-        "Graptophyllum pictum (L.) Griff.",
-        "Justicia gendarussa Burm.f.",
-        "Piper betle L.",
-        "Symphytum officinale L.(boraginaceae)",
-        "Tabernaemontana sp.",
-        "Zingiber Purpureum Roxb",
-        "Zingiber officinale Roxb",
-        "amomum compactum sol.ex manton",
-        "anredera cordifolia (ten) steenis",
-        "plantago major L(plantaginaceae)"
+        "Alpinia_galangaL_willdangiberaceae",
+        "Antidesma_bunius_L_Spreng",
+        "Blumea_balsamifera_L_DC",
+        "Cinnamomum_verum_JPresl",
+        "Curcuma_sylvatica_vahl_Zingiberaceae",
+        "Erythrina_hypaphorus_Boerl_ex_Koord",
+        "Euchresta_horsfieldii_Lesch_Benn",
+        "Graptophyllum_pictum_L_Griff",
+        "Justicia_gendarussa_Burmf",
+        "Piper_betle_L",
+        "Symphytum_officinale_Lboraginaceae",
+        "Tabernaemontana_sp",
+        "Zingiber_Purpureum_Roxb",
+        "Zingiber_officinale_Roxb",
+        "amomum_compactum_solex_manton",
+        "anredera_cordifolia_ten_steenis",
+        "plantago_major_Lplantaginaceae"
     ]
     CLASS_NAMES = sorted(CLASS_NAMES)
     CLASS_RAW_COUNTS = [400] * len(CLASS_NAMES)
@@ -74,6 +84,9 @@ NUM_CLASSES = len(CLASS_NAMES)
 CLASS_TO_IDX = {name: idx for idx, name in enumerate(CLASS_NAMES)}
 IDX_TO_CLASS = {idx: name for name, idx in CLASS_TO_IDX.items()}
 
+# ==============================================================================
+# 4. PRE-PROCESSING & AUGMENTASI GAMBAR
+# ==============================================================================
 IMAGE_SIZE = 224
 CHANNELS = 3
 MEAN = [0.485, 0.456, 0.406]
@@ -91,6 +104,9 @@ MIN_AUG_MULTIPLIER = 1
 USE_CLASS_WEIGHTED_LOSS = True
 USE_WEIGHTED_SAMPLER = False
 
+# ==============================================================================
+# 5. HYPERPARAMETER TRAINING GLOBAL
+# ==============================================================================
 BATCH_SIZE = 16
 NUM_EPOCHS = 40
 LEARNING_RATE = 0.0001
@@ -98,13 +114,14 @@ WEIGHT_DECAY = 1e-4
 MOMENTUM = 0.9
 NUM_WORKERS = 4
 
-LR_PATIENCE = 3
+LR_PATIENCE = 5
 LR_FACTOR = 0.5
 LR_MIN = 1e-6
+EARLY_STOP_PATIENCE = 10
 
-EARLY_STOP_PATIENCE = 20
-LR_PATIENCE         = 7
-
+# ==============================================================================
+# 6. HYPERPARAMETER TRAINING SPESIFIK (PER MODEL)
+# ==============================================================================
 MODEL_HYPERPARAMS = {
     "resnet50": {
         "batch_size": 8,
@@ -127,6 +144,9 @@ def get_hyperparams(model_name: str) -> dict:
         "learning_rate": override.get("learning_rate", LEARNING_RATE),
     }
 
+# ==============================================================================
+# 7. KONFIGURASI SISTEM & HARDWARE (PYTORCH)
+# ==============================================================================
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 PIN_MEMORY = True if torch.cuda.is_available() else False
 CUDNN_BENCHMARK = True
@@ -136,3 +156,9 @@ FREEZE_BACKBONE = True
 
 LOG_INTERVAL = 10
 SAVE_EVERY = 5
+
+# ==============================================================================
+# 8. KONFIGURASI YOLO11 (DETEKSI AREA DAUN)
+# ==============================================================================
+YOLO_WEIGHTS_PATH = os.path.join(BASE_DIR, "weight", "yolo11x_leaf.pt")
+YOLO_CONF_THRESHOLD = 0.15

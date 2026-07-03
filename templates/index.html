@@ -1,925 +1,203 @@
 <!DOCTYPE html>
 <html lang="id">
-
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Premium Herbal AI Dashboard - Multi-Model Evaluation</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap"
-        rel="stylesheet">
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Identifikasi Spesies Daun Obat</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        *,
-        *::before,
-        *::after {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        :root {
-            --primary: #40916c;
-            --primary-hover: #52b788;
-            --primary-glow: rgba(64, 145, 108, 0.35);
-            --bg: #0b1a13;
-            --bg-gradient: linear-gradient(135deg, #07120d 0%, #0d261b 100%);
-            --card-bg: rgba(22, 48, 36, 0.45);
-            --card-border: rgba(149, 213, 178, 0.15);
-            --text: #f0f7f4;
-            --text-muted: #95d5b2;
-            --accent: #52b788;
-            --danger: #ff5a5f;
-            --danger-bg: rgba(255, 90, 95, 0.15);
-            --success: #74c69d;
-            --success-bg: rgba(116, 198, 157, 0.15);
-            --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
-        }
-
-        body {
-            font-family: 'Inter', system-ui, sans-serif;
-            background: var(--bg-gradient);
-            color: var(--text);
-            min-height: 100vh;
-            line-height: 1.6;
-            overflow-x: hidden;
-        }
-
-        header {
-            background: rgba(11, 26, 19, 0.7);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border-bottom: 1px solid var(--card-border);
-            padding: 1.2rem 2.5rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
-        }
-
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 0.8rem;
-        }
-
-        .brand-icon {
-            font-size: 1.8rem;
-            color: var(--accent);
-            animation: pulse 3s infinite ease-in-out;
-        }
-
-        .brand h1 {
-            font-family: 'Outfit', sans-serif;
-            font-size: 1.4rem;
-            font-weight: 800;
-            letter-spacing: 0.5px;
-            background: linear-gradient(to right, #ffffff, var(--accent));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .status-pill {
-            font-size: 0.75rem;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 50px;
-            padding: 0.4rem 1.2rem;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            transition: all 0.3s ease;
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--danger);
-            box-shadow: 0 0 8px var(--danger);
-            transition: all 0.3s ease;
-        }
-
-        main {
-            max-width: 1300px;
-            margin: 2rem auto;
-            padding: 0 2rem;
-            animation: fadeInUp 0.8s ease-out;
-        }
-
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: 1fr 1.5fr;
-            gap: 2rem;
-        }
-
-        @media (max-width: 1024px) {
-            .dashboard-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .glass-card {
-            background: var(--card-bg);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid var(--card-border);
-            border-radius: 20px;
-            box-shadow: var(--shadow);
-            padding: 1.8rem;
-            transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .glass-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 4px;
-            background: linear-gradient(90deg, transparent, var(--accent), transparent);
-            opacity: 0.3;
-        }
-
-        .glass-card:hover {
-            border-color: rgba(149, 213, 178, 0.3);
-            box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.5);
-        }
-
-        .card-title {
-            font-family: 'Outfit', sans-serif;
-            font-size: 1.15rem;
-            font-weight: 700;
-            margin-bottom: 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.6rem;
-            color: #ffffff;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            padding-bottom: 0.8rem;
-        }
-
-        .drop-zone {
-            border: 2px dashed rgba(149, 213, 178, 0.3);
-            border-radius: 16px;
-            padding: 3rem 1.5rem;
-            text-align: center;
-            cursor: pointer;
-            background: rgba(27, 67, 50, 0.2);
-            transition: all 0.3s ease;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .drop-zone:hover {
-            border-color: var(--accent);
-            background: rgba(27, 67, 50, 0.35);
-            box-shadow: 0 0 15px rgba(82, 183, 136, 0.1);
-        }
-
-        .upload-icon {
-            font-size: 2.5rem;
-            color: var(--accent);
-            transition: transform 0.3s ease;
-        }
-
-        .drop-zone:hover .upload-icon {
-            transform: translateY(-5px);
-        }
-
-        .drop-zone p {
-            font-size: 0.95rem;
-            color: var(--text-muted);
-        }
-
-        .drop-zone span {
-            font-size: 0.8rem;
-            color: rgba(255, 255, 255, 0.4);
-        }
-
-        .preview-wrap {
-            margin-top: 1.5rem;
-            border-radius: 12px;
-            overflow: hidden;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            display: none;
-            position: relative;
-        }
-
-        .preview-wrap img {
-            width: 100%;
-            max-height: 300px;
-            object-fit: cover;
-            display: block;
-        }
-
-        .btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.6rem;
-            width: 100%;
-            margin-top: 1.5rem;
-            padding: 1rem;
-            border: none;
-            border-radius: 12px;
-            font-family: 'Outfit', sans-serif;
-            font-weight: 700;
-            font-size: 1rem;
-            cursor: pointer;
-            background: linear-gradient(135deg, var(--primary), #2d6a4f);
-            color: #ffffff;
-            box-shadow: 0 4px 15px rgba(64, 145, 108, 0.3);
-            transition: all 0.3s ease;
-        }
-
-        .btn:hover:not(:disabled) {
-            background: linear-gradient(135deg, var(--primary-hover), var(--primary));
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(64, 145, 108, 0.5);
-        }
-
-        .btn:active:not(:disabled) {
-            transform: translateY(1px);
-        }
-
-        .btn:disabled {
-            background: rgba(255, 255, 255, 0.08);
-            color: rgba(255, 255, 255, 0.3);
-            cursor: not-allowed;
-            box-shadow: none;
-        }
-
-        .results-container {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            justify-content: center;
-        }
-
-        .placeholder-box {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-            color: rgba(255, 255, 255, 0.4);
-            gap: 1rem;
-            min-height: 300px;
-            text-align: center;
-        }
-
-        .placeholder-icon {
-            font-size: 3.5rem;
-            opacity: 0.3;
-        }
-
-        .ensemble-box {
-            border-radius: 14px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            animation: zoomIn 0.4s ease-out;
-        }
-
-        .ensemble-box.rejected {
-            background: var(--danger-bg);
-            border: 1px solid rgba(255, 90, 95, 0.3);
-        }
-
-        .verdict-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: 0.8rem;
-            font-weight: 600;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
-
-        .verdict-header.rejected {
-            color: var(--danger);
-        }
-
-        .leaf-name {
-            font-family: 'Outfit', sans-serif;
-            font-size: 1.8rem;
-            font-weight: 800;
-            color: #ffffff;
-            margin-top: 0.2rem;
-        }
-
-        .ood-reason-text {
-            color: rgba(255, 255, 255, 0.85);
-            font-size: 0.95rem;
-        }
-
-        .models-comparison {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-
-        .model-card {
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 12px;
-            padding: 1.2rem;
-            display: flex;
-            flex-direction: column;
-            gap: 0.8rem;
-        }
-
-        .model-header {
-            font-family: 'Outfit', sans-serif;
-            font-size: 1rem;
-            font-weight: 700;
-            color: var(--accent);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            padding-bottom: 0.5rem;
-        }
-
-        .model-prediction {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: #ffffff;
-        }
-
-        .model-stat {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.85rem;
-            color: var(--text-muted);
-        }
-
-        .model-stat-val {
-            font-weight: 600;
-            color: #ffffff;
-        }
-
-        .saliency-mini {
-            width: 100%;
-            height: 120px;
-            border-radius: 8px;
-            object-fit: cover;
-            margin-top: 0.5rem;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .edu-section {
-            grid-column: 1 / -1;
-            margin-top: 2rem;
-        }
-
-        .edu-card {
-            background: rgba(14, 34, 25, 0.55);
-            border: 1px solid rgba(82, 183, 136, 0.2);
-        }
-
-        .edu-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 1rem;
-            margin-top: 1.5rem;
-        }
-
-        @media (max-width: 1024px) {
-            .edu-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .edu-step {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 1.2rem;
-            display: flex;
-            flex-direction: column;
-            gap: 0.6rem;
-            transition: all 0.3s ease;
-            cursor: pointer;
-        }
-
-        .edu-step:hover {
-            background: rgba(82, 183, 136, 0.06);
-            border-color: rgba(82, 183, 136, 0.25);
-            transform: translateY(-3px);
-        }
-
-        .edu-step.active {
-            background: rgba(82, 183, 136, 0.1);
-            border-color: var(--accent);
-            box-shadow: 0 0 12px rgba(82, 183, 136, 0.15);
-        }
-
-        .step-number {
-            font-family: 'Outfit', sans-serif;
-            font-size: 0.8rem;
-            font-weight: 800;
-            color: var(--accent);
-            text-transform: uppercase;
-        }
-
-        .step-title {
-            font-family: 'Outfit', sans-serif;
-            font-weight: 700;
-            font-size: 0.95rem;
-            color: #ffffff;
-        }
-
-        .step-desc {
-            font-size: 0.78rem;
-            color: rgba(255, 255, 255, 0.6);
-            line-height: 1.4;
-        }
-
-        .edu-display-panel {
-            margin-top: 1.5rem;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 1.5rem;
-            min-height: 180px;
-            animation: fadeIn 0.4s ease-out;
-        }
-
-        .edu-panel-title {
-            font-family: 'Outfit', sans-serif;
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: var(--accent);
-            margin-bottom: 0.6rem;
-        }
-
-        .edu-panel-content {
-            font-size: 0.9rem;
-            color: rgba(255, 255, 255, 0.85);
-        }
-
-        .edu-tech-pill {
-            display: inline-block;
-            font-size: 0.75rem;
-            font-weight: 600;
-            background: rgba(82, 183, 136, 0.15);
-            color: var(--accent);
-            padding: 0.2rem 0.6rem;
-            border-radius: 4px;
-            margin-right: 0.5rem;
-            margin-top: 0.8rem;
-        }
-
-        .spinner-wrap {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 1.2rem;
-        }
-
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 4px solid rgba(82, 183, 136, 0.15);
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        @keyframes pulse {
-
-            0%,
-            100% {
-                opacity: 0.7;
-                transform: scale(1);
-            }
-
-            50% {
-                opacity: 1;
-                transform: scale(1.05);
-            }
-        }
-
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-            }
-
-            to {
-                opacity: 1;
-            }
-        }
-
-        @keyframes zoomIn {
-            from {
-                opacity: 0;
-                transform: scale(0.95);
-            }
-
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
+        body { background-color: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .main-card { border: none; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        .preview-box { width: 100%; height: 260px; border: 2px dashed #cbd5e1; border-radius: 10px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #fff; position: relative; }
+        .preview-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .model-card { border-left: 5px solid #2ecc71; background: #fff; transition: transform 0.2s; }
+        .model-card:hover { transform: translateY(-2px); }
+        .progress { height: 12px; border-radius: 6px; }
     </style>
 </head>
-
 <body>
 
-    <header>
-        <div class="brand">
-            <span class="brand-icon">🌿</span>
-            <h1>HerbalVision Dashboard</h1>
-        </div>
-        <div class="status-pill">
-            <span class="status-dot"></span>
-            <span class="status-text">Memeriksa Layanan Server...</span>
-        </div>
-    </header>
-
-    <main>
-        <div class="dashboard-grid">
-            <div class="glass-card">
-                <div class="card-title">
-                    <span>📸</span> Pengambilan & Unggah Sampel Daun
-                </div>
-
-                <div class="drop-zone upload-area">
-                    <span class="upload-icon">📤</span>
-                    <p>Tarik & Lepaskan gambar daun di sini, atau <strong>Klik untuk memilih</strong></p>
-                    <span>Mendukung file: JPG, JPEG, PNG (Maks 10MB)</span>
-                </div>
-
-                <input type="file" class="file-input" accept="image/*" style="display:none;" />
-
-                <div class="preview-wrap view-area">
-                    <img class="preview-img" src="" alt="Preview Citra" />
-                </div>
-
-                <button class="btn predict-btn" disabled>
-                    <span>⚡</span> Mulai Identifikasi Spesies
-                </button>
-
-                <div
-                    style="margin-top: 1.5rem; background: rgba(82, 183, 136, 0.08); border: 1px dashed rgba(82, 183, 136, 0.3); border-radius: 12px; padding: 1rem; display: flex; gap: 0.8rem; align-items: flex-start; animation: fadeIn 0.8s ease-in-out;">
-                    <span style="font-size: 1.5rem; line-height: 1;">💡</span>
-                    <div style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
-                        <strong
-                            style="color: #ffffff; display: block; margin-bottom: 0.2rem; font-family: 'Outfit', sans-serif;">Tips
-                            Klasifikasi Akurat:</strong>
-                        Ambil foto <span style="color: var(--accent); font-weight: 600;">satu helai daun tunggal secara
-                            dekat (close-up)</span> dengan latar belakang bersih/datar. Hindari memfoto ranting rimbun
-                        atau banyak daun bertumpuk agar AI dapat mendeteksi tepi dan urat daun dengan sempurna.
-                    </div>
-                </div>
-            </div>
-
-            <div class="glass-card">
-                <div class="card-title">
-                    <span>🔬</span> Hasil Deteksi 3 Model Arsitektur
-                </div>
-
-                <div class="results-container display-results">
-                    <div class="placeholder-box">
-                        <span class="placeholder-icon">🍃</span>
-                        <p>Unggah foto sampel daun herbal untuk menganalisis klasifikasi, tingkat kepercayaan, dan
-                            visualisasi spasial peta Grad-CAM secara komparatif.</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="glass-card edu-section edu-card">
-                <div class="card-title" style="margin-bottom: 0.5rem;">
-                    <span>🧠</span> Panel Pembelajaran Interaktif: Bagaimana AI Membaca Daun Anda?
-                </div>
-                <p style="font-size:0.85rem; color: var(--text-muted);">
-                    Klik langkah di bawah ini untuk melihat bagaimana matematika konvolusi dan arsitektur Multi-Model
-                    memproses citra menjadi pengetahuan biologis.
-                </p>
-
-                <div class="edu-grid">
-                    <div class="edu-step active" onclick="activateStep(1)">
-                        <span class="step-number">Langkah 1</span>
-                        <span class="step-title">ResNet50</span>
-                        <span class="step-desc">Model konvolusi mendalam dengan Residual Connections untuk mempelajari
-                            fitur daun kompleks tanpa gradien menghilang.</span>
-                    </div>
-
-                    <div class="edu-step" onclick="activateStep(2)">
-                        <span class="step-number">Langkah 2</span>
-                        <span class="step-title">MobileNetV3-Small</span>
-                        <span class="step-desc">Arsitektur jaringan saraf ringan dan cepat yang menggunakan Depthwise
-                            Separable Convolutions.</span>
-                    </div>
-
-                    <div class="edu-step" onclick="activateStep(3)">
-                        <span class="step-number">Langkah 3</span>
-                        <span class="step-title">ViT-Base/16</span>
-                        <span class="step-desc">Vision Transformer yang membagi gambar menjadi patch dan menggunakan
-                            mekanisme Self-Attention global.</span>
-                    </div>
-
-                    <div class="edu-step" onclick="activateStep(4)">
-                        <span class="step-number">Langkah 4</span>
-                        <span class="step-title">Grad-CAM</span>
-                        <span class="step-desc">Pemetaan visual yang menyoroti area spesifik pada daun yang paling
-                            mempengaruhi keputusan model konvolusi.</span>
-                    </div>
-                </div>
-
-                <div class="edu-display-panel">
-                    <div class="edu-panel-title" id="edu-title">ResNet50 (Residual Network)</div>
-                    <div class="edu-panel-content" id="edu-desc">
-                        ResNet50 adalah salah satu model konvolusi paling tangguh. Ia memecahkan masalah degradasi
-                        akurasi pada jaringan yang sangat dalam dengan memperkenalkan "Residual Connections" (jalur
-                        pintas). Ini memungkinkan model untuk mempelajari hierarki urat daun yang sangat detail tanpa
-                        kehilangan informasi dasar tekstur dari lapisan awal.
-                    </div>
-                    <div id="edu-tags">
-                        <span class="edu-tech-pill">Deep CNN</span>
-                        <span class="edu-tech-pill">Residual Blocks</span>
-                        <span class="edu-tech-pill">High Accuracy</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <script>
-        const eduData = {
-            1: {
-                title: "ResNet50 (Residual Network)",
-                desc: "ResNet50 adalah salah satu model konvolusi paling tangguh. Ia memecahkan masalah degradasi akurasi pada jaringan yang sangat dalam dengan memperkenalkan 'Residual Connections' (jalur pintas). Ini memungkinkan model untuk mempelajari hierarki urat daun yang sangat detail tanpa kehilangan informasi dasar tekstur dari lapisan awal.",
-                tags: ["Deep CNN", "Residual Blocks", "High Accuracy"]
-            },
-            2: {
-                title: "MobileNetV3-Small (Edge AI)",
-                desc: "MobileNetV3 dirancang khusus untuk efisiensi tinggi pada perangkat dengan spesifikasi rendah. Ia menggunakan teknik 'Depthwise Separable Convolutions' yang memisahkan filter spasial dan filter channel, drastis mengurangi beban komputasi namun tetap mempertahankan akurasi pengenalan pola rimpang yang esensial.",
-                tags: ["Lightweight CNN", "Depthwise Separable", "Fast Inference"]
-            },
-            3: {
-                title: "Vision Transformer (ViT-Base/16)",
-                desc: "Berbeda total dengan CNN yang melihat piksel secara lokal, ViT memecah gambar daun menjadi potongan-potongan kecil (patches) berukuran 16x16. Ia kemudian menggunakan mekanisme 'Self-Attention' untuk melihat hubungan seluruh potongan daun secara bersamaan (global view), sangat kuat dalam mengenali bentuk simetri dan tepi keseluruhan.",
-                tags: ["Transformer", "Self-Attention", "Global Context"]
-            },
-            4: {
-                title: "Grad-CAM Saliency Mapping",
-                desc: "Grad-CAM (Gradient-weighted Class Activation Mapping) adalah teknik yang memvisualisasikan 'apa yang dilihat AI'. Area berwarna merah/panas pada gambar menunjukkan piksel spesifik (seperti ujung daun bergerigi atau urat tengah) yang paling memberikan bukti kuat bagi model konvolusi dalam menentukan kelas tanaman tersebut.",
-                tags: ["Explainable AI", "Saliency Map", "Visual Feedback"]
-            }
-        };
-
-        function activateStep(stepNum) {
-            const steps = document.querySelectorAll('.edu-step');
-            steps.forEach((s, idx) => {
-                if (idx + 1 === stepNum) {
-                    s.classList.add('active');
-                } else {
-                    s.classList.remove('active');
-                }
-            });
-
-            const data = eduData[stepNum];
-            document.getElementById('edu-title').textContent = data.title;
-            document.getElementById('edu-desc').textContent = data.desc;
-
-            const tagsDiv = document.getElementById('edu-tags');
-            tagsDiv.innerHTML = '';
-            data.tags.forEach(t => {
-                const span = document.createElement('span');
-                span.className = 'edu-tech-pill';
-                span.textContent = t;
-                tagsDiv.appendChild(span);
-            });
-        }
-
-        async function checkStatus() {
-            const dot = document.querySelector('.status-dot');
-            const txt = document.querySelector('.status-text');
-            try {
-                const r = await fetch('/models/status');
-                const d = await r.json();
-                if (d.loaded_models && d.loaded_models.length > 0) {
-                    dot.style.background = '#74c69d';
-                    dot.style.boxShadow = '0 0 10px #74c69d';
-                    txt.textContent = d.loaded_models.length + ' Model Aktif & Siap Melayani';
-                } else {
-                    dot.style.background = '#ffb703';
-                    dot.style.boxShadow = '0 0 10px #ffb703';
-                    txt.textContent = 'Model Belum Dilatih di Server';
-                }
-            } catch (e) {
-                dot.style.background = 'var(--danger)';
-                dot.style.boxShadow = '0 0 10px var(--danger)';
-                txt.textContent = 'Server Offline / Gangguan Jaringan';
-            }
-        }
-        checkStatus();
-
-        const dropZone = document.querySelector('.upload-area');
-        const fileInput = document.querySelector('.file-input');
-        const predictBtn = document.querySelector('.predict-btn');
-        let selectedFile = null;
-
-        dropZone.addEventListener('click', () => fileInput.click());
-
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, (e) => {
-                e.preventDefault();
-                dropZone.style.borderColor = 'var(--accent)';
-                dropZone.style.background = 'rgba(27, 67, 50, 0.45)';
-            }, false);
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, (e) => {
-                e.preventDefault();
-                dropZone.style.borderColor = 'rgba(149, 213, 178, 0.3)';
-                dropZone.style.background = 'rgba(27, 67, 50, 0.2)';
-            }, false);
-        });
-
-        dropZone.addEventListener('drop', (e) => {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-            if (files.length) {
-                handleFile(files[0]);
-            }
-        });
-
-        fileInput.addEventListener('change', () => {
-            if (fileInput.files[0]) {
-                handleFile(fileInput.files[0]);
-            }
-        });
-
-        function handleFile(file) {
-            selectedFile = file;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                document.querySelector('.preview-img').src = e.target.result;
-                document.querySelector('.view-area').style.display = 'block';
-                predictBtn.disabled = false;
-            };
-            reader.readAsDataURL(file);
-        }
-
-        // ─── Resize & compress gambar di browser sebelum dikirim ke server ───
-        async function getResizedImage(base64Str) {
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.src = base64Str;
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = 300;  // Resize drastis ke 300px
-                    canvas.height = 300;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, 300, 300);
-                    resolve(canvas.toDataURL('image/jpeg', 0.7)); // Kompres kualitas 70%
-                };
-            });
-        }
-
-        predictBtn.addEventListener('click', async () => {
-            if (!selectedFile) return;
-
-            predictBtn.disabled = true;
-            const resultsContainer = document.querySelector('.display-results');
-            resultsContainer.innerHTML = `
-    <div class="placeholder-box">
-      <div class="spinner-wrap">
-        <div class="spinner"></div>
-        <p style="font-size:0.95rem; color:var(--text-muted);">Menjalankan inferensi pada ResNet50, MobileNet, dan ViT...</p>
-      </div>
+<div class="container py-5">
+    <div class="text-center mb-5">
+        <h1 class="fw-bold text-success"><i class="fa-solid fa-leaf me-2"></i>Klasifikasi Spesies Daun Obat</h1>
+        <p class="text-muted">Deteksi Area dengan YOLO11 & Prediksi Paralel dengan MobileNet, ResNet, dan ViT</p>
     </div>
-  `;
 
-            try {
-                // Ambil base64 asli dari file yang dipilih
-                const originalBase64 = await fileToBase64(selectedFile);
+    <div class="card main-card p-4 bg-white mb-4">
+        <div class="row g-4">
+            <div class="col-md-6">
+                <h5 class="fw-semibold mb-3"><i class="fa-solid fa-image me-2 text-primary"></i>Unggah Gambar Pengujian</h5>
+                <div class="mb-3">
+                    <input class="form-file-input form-control" type="file" id="imageInput" accept="image/*">
+                </div>
+                <div class="preview-box">
+                    <img id="inputPreview" src="" alt="" class="d-none">
+                    <div id="uploadPlaceholder" class="text-center text-muted">
+                        <i class="fa-solid fa-cloud-arrow-up fa-3x mb-2 text-secondary"></i>
+                        <p class="mb-0">Pilih file gambar daun tanaman obat</p>
+                    </div>
+                </div>
+                <button id="btnAnalyze" class="btn btn-success w-100 mt-3 py-2 fw-bold d-none">
+                    <i class="fa-solid fa-microscope me-2"></i>Mulai Analisis Sistem
+                </button>
+            </div>
 
-                // Kecilkan gambar di browser sebelum dikirim ke server
-                const smallImage = await getResizedImage(originalBase64);
+            <div class="col-md-6">
+                <h5 class="fw-semibold mb-3"><i class="fa-solid fa-crop-simple me-2 text-warning"></i>Tahap 1: Deteksi Lokasi Daun (YOLO11)</h5>
+                <div class="preview-box">
+                    <img id="yoloCropPreview" src="" alt="" class="d-none">
+                    <div id="yoloPlaceholder" class="text-center text-muted">
+                        <i class="fa-solid fa-vector-square fa-3x mb-2 text-secondary"></i>
+                        <p class="mb-0">Area potongan daun terdeteksi akan tampil di sini</p>
+                    </div>
+                </div>
+                <div class="alert alert-info mt-3 py-2" id="yoloStatusText" style="font-size: 0.9rem;">
+                    <i class="fa-solid fa-circle-info me-2"></i>Menunggu input gambar diproses...
+                </div>
+            </div>
+        </div>
+    </div>
 
-                const resp = await fetch('/predict', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: smallImage })
+    <div id="loadingIndicator" class="text-center d-none my-4">
+        <div class="spinner-border text-success" role="status" style="width: 3rem; height: 3rem;"></div>
+        <p class="mt-2 fw-semibold text-muted">YOLO sedang memotong objek & 3 Model Klasifikasi sedang mengevaluasi...</p>
+    </div>
+
+    <div id="errorAlert" class="alert alert-danger d-none main-card" role="alert">
+        <h4 class="alert-heading fw-bold"><i class="fa-solid fa-triangle-exclamation me-2"></i>Gambar Ditolak Sistem!</h4>
+        <p id="errorMsg" class="mb-0"></p>
+    </div>
+
+    <div id="resultsSection" class="d-none">
+        <h4 class="fw-bold text-dark mb-3"><i class="fa-solid fa-chart-bar me-2 text-success"></i>Tahap 2: Hasil Prediksi Spesies Daun</h4>
+        <div class="row g-4" id="modelsGrid"></div>
+    </div>
+</div>
+
+<script>
+    const imageInput = document.getElementById('imageInput');
+    const inputPreview = document.getElementById('inputPreview');
+    const uploadPlaceholder = document.getElementById('uploadPlaceholder');
+    const btnAnalyze = document.getElementById('btnAnalyze');
+    
+    const yoloCropPreview = document.getElementById('yoloCropPreview');
+    const yoloPlaceholder = document.getElementById('yoloPlaceholder');
+    const yoloStatusText = document.getElementById('yoloStatusText');
+
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    const errorAlert = document.getElementById('errorAlert');
+    const errorMsg = document.getElementById('errorMsg');
+    const resultsSection = document.getElementById('resultsSection');
+    const modelsGrid = document.getElementById('modelsGrid');
+
+    let base64Image = "";
+
+    imageInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            base64Image = event.target.result;
+            inputPreview.src = base64Image;
+            inputPreview.classList.remove('d-none');
+            uploadPlaceholder.classList.add('d-none');
+            btnAnalyze.classList.remove('d-none');
+
+            // Reset komponen output
+            resultsSection.classList.add('d-none');
+            errorAlert.classList.add('d-none');
+            yoloCropPreview.classList.add('d-none');
+            yoloPlaceholder.classList.remove('d-none');
+            yoloStatusText.innerHTML = '<i class="fa-solid fa-circle-info me-2"></i>Gambar siap diproses. Silakan klik tombol analisis.';
+        };
+        reader.readAsDataURL(file);
+    });
+
+    btnAnalyze.addEventListener('click', async function() {
+        loadingIndicator.classList.remove('d-none');
+        resultsSection.classList.add('d-none');
+        errorAlert.classList.add('d-none');
+
+        try {
+            const response = await fetch('/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: base64Image })
+            });
+            const data = await response.json();
+            loadingIndicator.classList.add('d-none');
+
+            // Perbarui Tampilan Sisi YOLO11 Crop
+            if (data.cropped_image) {
+                yoloCropPreview.src = data.cropped_image;
+                yoloCropPreview.classList.remove('d-none');
+                yoloPlaceholder.classList.add('d-none');
+            }
+            if (data.yolo_status) {
+                yoloStatusText.innerHTML = `<i class="fa-solid fa-square-check text-success me-2"></i><strong>YOLO11:</strong> ${data.yolo_status}`;
+            }
+
+            // Validasi Penolakan Gambar
+            if (data.global_status && data.global_status.accepted === false) {
+                errorMsg.innerText = data.global_status.ood_reason;
+                errorAlert.classList.remove('d-none');
+                return;
+            }
+
+            // Render Output Tiga Model
+            modelsGrid.innerHTML = "";
+            for (const [modelName, details] of Object.entries(data.models)) {
+                let probListHTML = "";
+                const sortedProbs = Object.entries(details.class_probs).sort((a,b) => b[1] - a[1]);
+                
+                sortedProbs.forEach(([className, val]) => {
+                    const pct = (val * 100).toFixed(1);
+                    const isSelected = className === details.predicted;
+                    probListHTML += `
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between small ${isSelected ? 'fw-bold text-success' : 'text-muted'}">
+                                <span>${className} ${isSelected ? '<i class="fa-solid fa-circle-check"></i>' : ''}</span>
+                                <span>${pct}%</span>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar ${isSelected ? 'bg-success' : 'bg-secondary opacity-50'}" role="progressbar" style="width: ${pct}%"></div>
+                            </div>
+                        </div>`;
                 });
 
-                if (!resp.ok) {
-                    throw new Error("Server error");
-                }
-
-                const data = await resp.json();
-                renderResults(data);
-            } catch (err) {
-                resultsContainer.innerHTML = `
-      <div class="ensemble-box rejected">
-        <div class="verdict-header rejected">Server Error / Model Hilang</div>
-        <div class="leaf-name">Proses Dibatalkan</div>
-        <p class="ood-reason-text">Gagal melakukan inferensi. Berkas bobot AI kemungkinan belum terunggah ke peladen awan atau terjadi kehabisan memori RAM.</p>
-      </div>
-    `;
-            } finally {
-                predictBtn.disabled = false;
+                const cardHTML = `
+                    <div class="col-lg-4 col-md-6">
+                        <div class="card h-100 model-card p-3 shadow-sm">
+                            <div class="d-flex justify-content-between align-items-center border-b pb-2 mb-3">
+                                <h5 class="fw-bold text-uppercase text-dark mb-0">${modelName}</h5>
+                                <span class="badge bg-light text-dark border">${details.inference_ms} ms</span>
+                            </div>
+                            <div class="mb-3 text-center bg-light p-2 rounded">
+                                <small class="text-muted d-block">Saliency Map (Fokus Fitur)</small>
+                                <img src="${details.heatmap_b64 || ''}" class="img-fluid rounded mt-1 border" style="max-height:140px; object-fit:contain;">
+                            </div>
+                            <div class="mb-3">
+                                <small class="text-muted">Hasil Klasifikasi Terpilih:</small>
+                                <div class="h5 fw-bold text-success">${details.predicted}</div>
+                                <small class="text-muted">Confidence: ${(details.confidence * 100).toFixed(2)}% | Entropy: ${details.entropy.toFixed(3)}</small>
+                            </div>
+                            <hr class="my-2">
+                            <div>${probListHTML}</div>
+                        </div>
+                    </div>`;
+                modelsGrid.innerHTML += cardHTML;
             }
-        });
+            resultsSection.classList.remove('d-none');
 
-        function fileToBase64(file) {
-            return new Promise((res, rej) => {
-                const r = new FileReader();
-                r.onload = () => res(r.result);
-                r.onerror = rej;
-                r.readAsDataURL(file);
-            });
+        } catch (error) {
+            loadingIndicator.classList.add('d-none');
+            errorMsg.innerText = "Gagal terhubung ke server backend aplikasi.";
+            errorAlert.classList.remove('d-none');
         }
-
-        function renderResults(data) {
-            const status = data.global_status || data.ensemble;
-            const models = data.models || {};
-            let html = '';
-
-            if (status.accepted) {
-                html += `
-      <div style="margin-bottom: 1rem;">
-        <h3 style="font-size: 1.1rem; color: #ffffff;">Detail Kinerja Tiap Model:</h3>
-        <p style="font-size: 0.85rem; color: var(--text-muted);">Berikut adalah perbandingan hasil prediksi independen dari ketiga arsitektur.</p>
-      </div>
-      <div class="models-comparison">
-    `;
-
-                for (const [m_name, r] of Object.entries(models)) {
-                    let displayName = m_name.toUpperCase();
-                    if (m_name === "resnet50") displayName = "ResNet50";
-                    if (m_name === "mobilenet") displayName = "MobileNetV3-Small";
-                    if (m_name === "vit") displayName = "ViT-Base/16";
-
-                    html += `
-        <div class="model-card">
-          <div class="model-header">${displayName}</div>
-          <div class="model-prediction">${r.predicted.replace('_', ' ')}</div>
-          <div class="model-stat">
-            <span>Keyakinan:</span>
-            <span class="model-stat-val">${(r.confidence * 100).toFixed(1)}%</span>
-          </div>
-          <div class="model-stat">
-            <span>Kecepatan:</span>
-            <span class="model-stat-val">${r.inference_ms} ms</span>
-          </div>
-      `;
-
-                    if (r.heatmap_b64) {
-                        html += `<img class="saliency-mini" src="data:image/jpeg;base64,${r.heatmap_b64}" alt="Saliency Map"/>`;
-                    }
-
-                    html += `</div>`;
-                }
-                html += `</div>`;
-
-            } else {
-                html += `
-      <div class="ensemble-box rejected">
-        <div class="verdict-header rejected">❌ Deteksi Out-of-Distribution (OOD)</div>
-        <div class="leaf-name">Objek Tidak Valid / Ditolak</div>
-        <p class="ood-reason-text">${status.ood_reason}</p>
-      </div>
-    `;
-            }
-
-            document.querySelector('.display-results').innerHTML = html;
-        }
-    </script>
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
-
 </html>

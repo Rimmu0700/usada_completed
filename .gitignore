@@ -4,7 +4,8 @@ dataset_input/
 dataset_source/
 dataset_split/
 dataset_augmented/
-weights/*.pt
+weight/*.pt
+!weight/.gitkeep
 results/
 .DS_Store
 *final_model.pth
