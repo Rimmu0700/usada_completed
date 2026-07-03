@@ -4,6 +4,7 @@ dataset_input/
 dataset_source/
 dataset_split/
 dataset_augmented/
+weights/*.pt
 results/
 .DS_Store
 *final_model.pth

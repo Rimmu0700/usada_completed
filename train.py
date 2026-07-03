@@ -5,7 +5,6 @@ import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.cuda.amp import GradScaler
 from pathlib import Path
 from sklearn.metrics import f1_score
 import numpy as np
@@ -62,9 +61,8 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler) -> dict:
     for images, labels in loader:
         images = images.to(DEVICE, non_blocking=True)
         labels = labels.to(DEVICE, non_blocking=True)
-        with torch.amp.autocast(device_type="cuda", enabled=torch.cuda.is_available()):
-            outputs = model(images)
-            loss = criterion(outputs, labels)
+        outputs = model(images)
+        loss = criterion(outputs, labels)
         optimizer.zero_grad(set_to_none=True)
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
@@ -93,9 +91,8 @@ def validate_one_epoch(model, loader, criterion) -> dict:
         for images, labels in loader:
             images = images.to(DEVICE, non_blocking=True)
             labels = labels.to(DEVICE, non_blocking=True)
-            with torch.amp.autocast(device_type="cuda", enabled=torch.cuda.is_available()):
-                outputs = model(images)
-                loss = criterion(outputs, labels)
+            outputs = model(images)
+            loss = criterion(outputs, labels)
             running_loss += loss.item() * images.size(0)
             preds = torch.argmax(outputs, dim=1)
             correct += (preds == labels).sum().item()
@@ -109,19 +106,34 @@ def validate_one_epoch(model, loader, criterion) -> dict:
 
 def maybe_unfreeze(model, model_name: str, epoch: int, base_lr: float):
     schedule = get_unfreeze_schedule(model_name)
-    unfreeze_points = {11: 0, 21: 1, 31: 2}
+
+    # [FIX] Epoch dipercepat: 5/10/15 agar layer terbuka
+    # sebelum early stopping terpicu
+    unfreeze_points = {5: 0, 10: 1, 15: 2}
+
     if epoch not in unfreeze_points:
         return None
+
     idx = unfreeze_points[epoch]
     if idx >= len(schedule):
         return None
+
     layer_to_open = schedule[idx]
     unfreeze_layer(model, layer_to_open)
+
+    # [FIX] LR moderat — bukan 0.1^(idx+1) yang terlalu kecil
+    # Layer backbone butuh LR cukup besar untuk belajar
+    # tapi tidak merusak bobot pretrained
+    lr_factors = {0: 0.3, 1: 0.1, 2: 0.03}
+    new_lr = base_lr * lr_factors[idx]
+
     trainable_params = [p for p in model.parameters() if p.requires_grad]
-    lr_factor = 0.1 ** (idx + 1)
-    new_optimizer = optim.Adam([
-        {"params": trainable_params, "lr": base_lr * lr_factor}
-    ], weight_decay=WEIGHT_DECAY)
+    new_optimizer = optim.Adam(
+        [{"params": trainable_params, "lr": new_lr}],
+        weight_decay=WEIGHT_DECAY
+    )
+
+    print(f"  [UNFREEZE] Epoch {epoch}: '{layer_to_open}' | lr: {new_lr:.2e}")
     return new_optimizer
 
 def train_single_model(model_name: str) -> dict:
@@ -191,7 +203,7 @@ def train_single_model(model_name: str) -> dict:
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=LR_FACTOR, patience=LR_PATIENCE, min_lr=LR_MIN,
     )
-    scaler = GradScaler(enabled=torch.cuda.is_available())
+    scaler = torch.amp.GradScaler("cuda", enabled=False)
     mem_tracker = GPUMemoryTracker()
     epoch_timer = EpochTimer()
 

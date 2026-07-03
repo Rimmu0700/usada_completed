@@ -102,19 +102,20 @@ LR_PATIENCE = 3
 LR_FACTOR = 0.5
 LR_MIN = 1e-6
 
-EARLY_STOP_PATIENCE = 10
+EARLY_STOP_PATIENCE = 20
+LR_PATIENCE         = 7
 
 MODEL_HYPERPARAMS = {
     "resnet50": {
-        "batch_size": 16,
+        "batch_size": 8,
         "learning_rate": 0.0001,
     },
     "mobilenet": {
-        "batch_size": 32,
+        "batch_size": 16,
         "learning_rate": 0.0005,
     },
     "vit": {
-        "batch_size": 8,
+        "batch_size": 4,
         "learning_rate": 0.00003,
     },
 }
