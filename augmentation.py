@@ -1,148 +1,101 @@
 import os
-import math
+import shutil
 import random
 from pathlib import Path
-from PIL import Image, ImageFilter
-import torchvision.transforms.functional as TF
 from config import (
-    TRAIN_DIR, AUG_TRAIN_DIR,
-    CLASS_NAMES, IMAGE_SIZE, RANDOM_SEED,
-    TARGET_TRAIN_PER_CLASS, MAX_AUG_MULTIPLIER, MIN_AUG_MULTIPLIER
+    DATA_SOURCE, TRAIN_DIR, VAL_DIR, TEST_DIR,
+    TRAIN_RATIO, VAL_RATIO, TEST_RATIO,
+    CLASS_NAMES, RANDOM_SEED
 )
 
+# Verify that all target class folders exist within the source dataset directory
+def validate_source_folders():
+    print("======================================================================")
+    print("DATASET FOLDER STRUCTURE VALIDATION")
+    print("======================================================================")
+    if not os.path.exists(DATA_SOURCE):
+        raise FileNotFoundError(f"Source folder dataset_source not found at {DATA_SOURCE}")
+    actual_folders = set(f for f in os.listdir(DATA_SOURCE) if os.path.isdir(os.path.join(DATA_SOURCE, f)))
+    expected_folders = set(CLASS_NAMES)
+    missing = expected_folders - actual_folders
+    extra = actual_folders - expected_folders
+    if missing:
+        print(f"\n[ERROR] The following folders are defined in CLASS_NAMES but MISSING in dataset_source:")
+        for f in missing:
+            print(f"    - {f}")
+        raise FileNotFoundError("Verify CLASS_NAMES spelling in config.py; it must be exact and case-sensitive.")
+    if extra:
+        print(f"\n[INFO] The following folders EXIST in dataset_source but will be IGNORED:")
+        for f in sorted(extra):
+            print(f"    - {f} (skipped)")
+    print(f"\n[OK] All {len(CLASS_NAMES)} class directories have been successfully located.\n")
 
-def create_aug_dirs():
+# Create the training, validation, and testing folder structure
+def create_split_dirs():
+    for split in [TRAIN_DIR, VAL_DIR, TEST_DIR]:
+        for cls in CLASS_NAMES:
+            Path(os.path.join(split, cls)).mkdir(parents=True, exist_ok=True)
+    print("[INFO] Target split directories created successfully.")
+
+# Split and copy images into training, validation, and test subsets based on defined ratios
+def split_dataset():
+    random.seed(RANDOM_SEED)
+    total_per_class = {}
     for cls in CLASS_NAMES:
-        Path(os.path.join(AUG_TRAIN_DIR, cls)).mkdir(parents=True, exist_ok=True)
-    print("[INFO] Folder dataset_augmented/train/ berhasil dibuat.")
-
-
-def calculate_multiplier(n_original: int) -> int:
-    """Hitung berapa kali augmentasi dibutuhkan per kelas agar mendekati target."""
-    if n_original == 0:
-        return 0
-    raw_multiplier = TARGET_TRAIN_PER_CLASS / n_original
-    multiplier = math.ceil(raw_multiplier)
-    multiplier = max(MIN_AUG_MULTIPLIER, min(multiplier, MAX_AUG_MULTIPLIER))
-    return multiplier
-
-
-def augment_image(img: Image.Image, aug_id: int) -> Image.Image:
-    """Terapkan satu set augmentasi acak ke satu gambar PIL."""
-    random.seed(RANDOM_SEED + aug_id)
-
-    img = img.resize((IMAGE_SIZE, IMAGE_SIZE), Image.BILINEAR)
-
-    if random.random() > 0.5:
-        img = TF.hflip(img)
-    if random.random() > 0.7:
-        img = TF.vflip(img)
-
-    angle = random.uniform(-30, 30)
-    img = TF.rotate(img, angle)
-
-    img = TF.adjust_brightness(img, random.uniform(0.7, 1.3))
-    img = TF.adjust_contrast(img,   random.uniform(0.7, 1.3))
-    img = TF.adjust_saturation(img, random.uniform(0.7, 1.3))
-
-    if random.random() > 0.5:
-        w, h   = img.size
-        crop_w = int(w * random.uniform(0.80, 0.95))
-        crop_h = int(h * random.uniform(0.80, 0.95))
-        left   = random.randint(0, w - crop_w)
-        top    = random.randint(0, h - crop_h)
-        img    = img.crop((left, top, left + crop_w, top + crop_h))
-        img    = img.resize((IMAGE_SIZE, IMAGE_SIZE), Image.BILINEAR)
-
-    img = TF.adjust_sharpness(img, random.uniform(0.6, 1.8))
-
-    if random.random() > 0.7:
-        img = img.filter(ImageFilter.GaussianBlur(radius=random.uniform(0.5, 1.3)))
-
-    return img
-
-
-def generate_augmented_dataset():
-    """Generate augmentasi proporsional per kelas, simpan ke dataset_augmented/train/."""
-    total_generated = 0
-    summary = []
-
-    print("=" * 70)
-    print(f"AUGMENTASI PROPORSIONAL — Target: {TARGET_TRAIN_PER_CLASS} gambar/kelas")
-    print("[INFO] Hasil ini dipakai BERSAMA oleh ResNet50, MobileNet, dan ViT")
-    print("=" * 70)
-
-    for cls in CLASS_NAMES:
-        cls_train_dir = os.path.join(TRAIN_DIR, cls)
-        cls_aug_dir   = os.path.join(AUG_TRAIN_DIR, cls)
-
-        if not os.path.exists(cls_train_dir):
-            print(f"[WARNING] Folder tidak ditemukan: {cls_train_dir}")
+        source_cls_dir = os.path.join(DATA_SOURCE, cls)
+        if not os.path.exists(source_cls_dir):
+            print(f"[WARNING] Directory not found: {source_cls_dir}")
             continue
-
-        image_files = [
-            f for f in os.listdir(cls_train_dir)
-            if f.lower().endswith((".jpg", ".jpeg", ".png"))
-        ]
-
-        if len(image_files) == 0:
-            print(f"[WARNING] Tidak ada gambar training di {cls_train_dir}")
+        all_files = [f for f in os.listdir(source_cls_dir) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
+        if len(all_files) == 0:
+            print(f"[WARNING] No image assets found in: {source_cls_dir}")
             continue
-
-        multiplier = calculate_multiplier(len(image_files))
-        cls_generated = 0
-
-        for fname in image_files:
-            src_path = os.path.join(cls_train_dir, fname)
-            try:
-                img = Image.open(src_path).convert("RGB")
-            except Exception as e:
-                print(f"[ERROR] Gagal membaca {src_path}: {e}")
-                continue
-
-            base_name = os.path.splitext(fname)[0]
-            orig_save = os.path.join(cls_aug_dir, f"{base_name}_orig.jpg")
-            img.resize((IMAGE_SIZE, IMAGE_SIZE), Image.BILINEAR).save(orig_save, "JPEG", quality=95)
-            cls_generated += 1
-
-            for i in range(multiplier):
-                aug_img  = augment_image(img.copy(), aug_id=(hash(fname) + i) % 100000)
-                aug_name = f"{base_name}_aug_{i+1:03d}.jpg"
-                aug_img.save(os.path.join(cls_aug_dir, aug_name), "JPEG", quality=95)
-                cls_generated += 1
-
-        total_generated += cls_generated
-        summary.append({
-            "class": cls, "n_original": len(image_files),
-            "multiplier": multiplier, "n_generated": cls_generated,
-        })
-
-        print(f"[AUG] {cls:28s} | Asli: {len(image_files):3d} | "
-              f"Multiplier: x{multiplier} | Hasil: {cls_generated:4d} gambar")
-
-    print("\n" + "=" * 70)
-    print("RINGKASAN AUGMENTASI")
-    print("=" * 70)
-    for s in summary:
-        deviation = s["n_generated"] - TARGET_TRAIN_PER_CLASS
-        flag = "✓" if abs(deviation) < 50 else "⚠"
-        print(f"  {flag} {s['class']:28s}: {s['n_generated']:4d} gambar "
-              f"(target: {TARGET_TRAIN_PER_CLASS}, selisih: {deviation:+d})")
-
-    print(f"\n[SUMMARY] Total gambar augmentasi: {total_generated}")
-
-    counts = [s["n_generated"] for s in summary]
-    if counts:
-        ratio = max(counts) / min(counts)
-        print(f"[SUMMARY] Rasio imbalance SETELAH augmentasi: {ratio:.2f}x "
-              f"({'SEIMBANG' if ratio < 1.3 else 'masih ada selisih, cek manual'})")
-
-    print("[INFO] Augmentasi selesai. Val dan test tidak diubah.")
-    print("=" * 70)
-
-    return summary
-
+        random.shuffle(all_files)
+        
+        # Calculate split indices
+        n_total = len(all_files)
+        n_train = int(n_total * TRAIN_RATIO)
+        n_val = int(n_total * VAL_RATIO)
+        n_test = n_total - n_train - n_val
+        
+        train_files = all_files[:n_train]
+        val_files = all_files[n_train:n_train + n_val]
+        test_files = all_files[n_train + n_val:]
+        
+        # Copy files to designated partitions
+        for fname in train_files:
+            shutil.copy(os.path.join(source_cls_dir, fname), os.path.join(TRAIN_DIR, cls, fname))
+        for fname in val_files:
+            shutil.copy(os.path.join(source_cls_dir, fname), os.path.join(VAL_DIR, cls, fname))
+        for fname in test_files:
+            shutil.copy(os.path.join(source_cls_dir, fname), os.path.join(TEST_DIR, cls, fname))
+            
+        total_per_class[cls] = {"total": n_total, "train": n_train, "val": n_val, "test": n_test}
+        print(f"[SPLIT] {cls:28s} Total: {n_total:4d} | Train: {n_train:4d} | Val: {n_val:3d} | Test: {n_test:3d}")
+        
+    print("\n======================================================================")
+    total_all = sum(v["total"] for v in total_per_class.values())
+    total_train = sum(v["train"] for v in total_per_class.values())
+    total_val = sum(v["val"] for v in total_per_class.values())
+    total_test = sum(v["test"] for v in total_per_class.values())
+    
+    # Summarize partitioning results
+    print(f"[SUMMARY] Total dataset images : {total_all}")
+    print(f"          Training subset      : {total_train} ({total_train/total_all*100:.1f}%)")
+    print(f"          Validation subset    : {total_val} ({total_val/total_all*100:.1f}%)")
+    print(f"          Testing subset       : {total_test} ({total_test/total_all*100:.1f}%)")
+    
+    min_val = min(v["val"] for v in total_per_class.values())
+    min_test = min(v["test"] for v in total_per_class.values())
+    if min_val < 5 or min_test < 5:
+        print(f"\n[WARNING] Found target class with validation count {min_val} or testing count {min_test} under 5 samples.")
+        
+    print("[INFO] Dataset split operation concluded. Source files remain unchanged.")
+    print("[INFO] These subsets will be shared universally across ResNet50, MobileNet, and ViT.")
+    print("======================================================================")
+    return total_per_class
 
 if __name__ == "__main__":
-    create_aug_dirs()
-    generate_augmented_dataset()
+    validate_source_folders()
+    create_split_dirs()
+    split_dataset()
