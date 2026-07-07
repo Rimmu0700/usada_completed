@@ -35,14 +35,25 @@ for m_name in MODEL_LIST:
     checkpoint_path = dirs["best_model_path"]
     if os.path.exists(checkpoint_path):
         try:
-            model = build_model(m_name)
+            model = build_model(m_name, NUM_CLASSES)
             checkpoint = torch.load(checkpoint_path, map_location=DEVICE, weights_only=False)
+            
+            # --- FIX 1: PENCOCOKAN KEY CHECKPOINT ---
             if "model_state" in checkpoint:
                 model.load_state_dict(checkpoint["model_state"])
+            elif "model_state_dict" in checkpoint:
+                model.load_state_dict(checkpoint["model_state_dict"])
             else:
                 model.load_state_dict(checkpoint)
+                
             model.to(DEVICE)
             model.eval()
+            
+            # --- FIX 2: PENCEGAHAN VRAM LEAK PADA SALIENCY MAP ---
+            # Matikan gradien untuk semua bobot agar hemat memori saat inferensi
+            for param in model.parameters():
+                param.requires_grad = False
+                
             loaded_models[m_name] = model
             print(f"Berhasil memuat model klasifikasi: {m_name}")
         except Exception as e:
@@ -123,7 +134,13 @@ def predict():
         box = boxes[0].xyxy[0].cpu().numpy()
         x1, y1, x2, y2 = map(int, box)
         img_np = original_img_np[y1:y2, x1:x2]
-        yolo_status = f"Daun terdeteksi di koordinat ({x1}, {y1}) hingga ({x2}, {y2})."
+        
+        # --- FIX 3: PENCEGAHAN CRASH OPENCV (ZERO-DIMENSION) ---
+        if img_np.size == 0:
+            img_np = original_img_np.copy()
+            yolo_status = "Daun terdeteksi tapi dimensi tidak valid. Menggunakan gambar penuh."
+        else:
+            yolo_status = f"Daun terdeteksi di koordinat ({x1}, {y1}) hingga ({x2}, {y2})."
     else:
         img_np = original_img_np.copy()
         yolo_status = "Daun tidak terdeteksi oleh YOLO11. Menggunakan gambar penuh sebagai fallback."
