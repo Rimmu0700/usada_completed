@@ -6,23 +6,21 @@ import torch.nn as nn
 import torchvision.transforms as T
 from PIL import Image
 import numpy as np
-
-# --- Import YOLO dari ultralytics ---
 from ultralytics import YOLO
-
-# Import variabel dari config
 from config import DEVICE, CLASS_NAMES, IDX_TO_CLASS, IMAGE_SIZE, MEAN, STD, MODEL_LIST, get_output_dirs, YOLO_WEIGHTS_PATH, YOLO_CONF_THRESHOLD
 from model import build_model
 
-# Inisialisasi model YOLO dari config
+# Load the pretrained YOLO detection engine
 yolo_model = YOLO(YOLO_WEIGHTS_PATH)
 
+# Define inference-time image transformation sequence
 inference_transform = T.Compose([
     T.Resize((IMAGE_SIZE, IMAGE_SIZE)),
     T.ToTensor(),
     T.Normalize(mean=MEAN, std=STD),
 ])
 
+# Initialize the classification model and restore weights from checkpoints
 def load_model_for_inference(model_name: str) -> nn.Module:
     dirs = get_output_dirs(model_name)
     checkpoint_path = dirs["best_model_path"]
@@ -42,14 +40,15 @@ def load_model_for_inference(model_name: str) -> nn.Module:
     model.eval()
     return model
 
+# Run end-to-end inference including detection and classification
 def predict_single_image(model: nn.Module, image_path: str) -> dict:
     if not os.path.exists(image_path):
-        raise FileNotFoundError(f"Gambar tidak ditemukan: {image_path}")
+        raise FileNotFoundError(f"Image not found at {image_path}")
 
     img = Image.open(image_path).convert("RGB")
     original_size = img.size
-
-    # --- Deteksi Area Daun dengan YOLO ---
+    
+    # Run YOLO detection for auto-cropping
     img_np = np.array(img)
     yolo_results = yolo_model(img_np, conf=YOLO_CONF_THRESHOLD, verbose=False)
     boxes = yolo_results[0].boxes
@@ -59,16 +58,16 @@ def predict_single_image(model: nn.Module, image_path: str) -> dict:
         x1, y1, x2, y2 = map(int, box)
         cropped_img_np = img_np[y1:y2, x1:x2]
         img = Image.fromarray(cropped_img_np)
-        yolo_status = f"Terdeteksi Daun (Crop: {img.size[0]}x{img.size[1]})"
+        yolo_status = f"Leaf Detected - Crop Target: {img.size[0]}x{img.size[1]}px"
     else:
-        yolo_status = "Daun tidak ditemukan oleh YOLO (Menggunakan Gambar Penuh)"
-    # -------------------------------------
+        yolo_status = "Leaf not detected by YOLO. Defaulting to full image."
 
     tensor = inference_transform(img).unsqueeze(0).to(DEVICE)
 
+    # Perform inference and record timing information
     if torch.cuda.is_available():
         start_event = torch.cuda.Event(enable_timing=True)
-        end_event   = torch.cuda.Event(enable_timing=True)
+        end_event = torch.cuda.Event(enable_timing=True)
         torch.cuda.synchronize()
         start_event.record()
     else:
@@ -85,59 +84,59 @@ def predict_single_image(model: nn.Module, image_path: str) -> dict:
     else:
         inference_ms = (time.perf_counter() - t_start) * 1000
 
-    probs      = torch.softmax(logits, dim=1).squeeze(0)
+    probs = torch.softmax(logits, dim=1).squeeze(0)
     confidence = probs.max().item()
-    pred_idx   = probs.argmax().item()
+    pred_idx = probs.argmax().item()
     pred_class = IDX_TO_CLASS[pred_idx]
 
-    all_probs = {
-        CLASS_NAMES[i]: round(probs[i].item() * 100, 2)
-        for i in range(len(CLASS_NAMES))
-    }
+    # Map output distribution to class probabilities
+    all_probs = {CLASS_NAMES[i]: round(probs[i].item() * 100, 2) for i in range(len(CLASS_NAMES))}
     all_probs_sorted = dict(sorted(all_probs.items(), key=lambda x: x[1], reverse=True))
 
     return {
-        "image_path":    image_path,
+        "image_path": image_path,
         "original_size": original_size,
-        "input_size":    f"{IMAGE_SIZE}×{IMAGE_SIZE}",
-        "predicted":     pred_class,
-        "confidence":    round(confidence * 100, 2),
-        "inference_ms":  round(inference_ms, 3),
-        "all_probs_%":   all_probs_sorted,
-        "yolo_status":   yolo_status
+        "input_size": f"{IMAGE_SIZE}x{IMAGE_SIZE}",
+        "predicted": pred_class,
+        "confidence": round(confidence * 100, 2),
+        "inference_ms": round(inference_ms, 3),
+        "all_probs_percent": all_probs_sorted,
+        "yolo_status": yolo_status
     }
 
+# Display prediction output cleanly on the terminal
 def print_prediction(result: dict, display_name: str = ""):
-    print("\n" + "=" * 60)
-    title = f"HASIL PREDIKSI SISTEM — {display_name}" if display_name else "HASIL PREDIKSI DAUN OBAT"
+    print("\n======================================================================")
+    title = f"SYSTEM PREDICTION RESULTS: {display_name}" if display_name else "MEDICAL PLANT PREDICTION RESULTS"
     print(title)
-    print("=" * 60)
-    print(f"  Nama File     : {os.path.basename(result['image_path'])}")
-    print(f"  Ukuran Asli   : {result['original_size'][0]}x{result['original_size'][1]} px")
-    print(f"  Sistem YOLO11 : {result['yolo_status']}")
-    print(f"  Ukuran Klasif : {result['input_size']}")
-    print(f"  Hasil Prediksi: {result['predicted']}")
-    print(f"  Confidence    : {result['confidence']:.2f}%")
-    print(f"  Waktu Proses  : {result['inference_ms']:.3f} ms")
-    print("-" * 60)
-    print("Probabilitas Distribusi Kelas:")
-    for cls, prob in result["all_probs_%"].items():
-        bar = "█" * int(prob / 5)
-        mark = " [TERPILIH]" if cls == result["predicted"] else ""
-        print(f"  {cls:25s}: {prob:6.2f}% {bar}{mark}")
-    print("=" * 60)
+    print("======================================================================")
+    print(f"  File Name         : {os.path.basename(result['image_path'])}")
+    print(f"  Original Size     : {result['original_size'][0]}x{result['original_size'][1]} px")
+    print(f"  YOLO11 System     : {result['yolo_status']}")
+    print(f"  Classifier Size   : {result['input_size']}")
+    print(f"  Predicted Class   : {result['predicted']}")
+    print(f"  Confidence Level  : {result['confidence']:.2f}%")
+    print(f"  Processing Time   : {result['inference_ms']:.3f} ms")
+    print("----------------------------------------------------------------------")
+    print("Class Distribution Probability:")
+    for cls, prob in result["all_probs_percent"].items():
+        bar_count = int(prob / 5)
+        bar = "".join(["*" for _ in range(bar_count)])
+        mark = " [SELECTED]" if cls == result["predicted"] else ""
+        print(f"  {cls:35s}: {prob:6.2f}% {bar}{mark}")
+    print("======================================================================")
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print("Penggunaan: python inference.py <nama_model> <path_gambar>")
-        print(f"Pilihan model: {MODEL_LIST}")
+        print(f"Usage: python inference.py <model_name> <image_path>")
+        print(f"Available models: {MODEL_LIST}")
         sys.exit(1)
 
     m_name = sys.argv[1]
     img_path = sys.argv[2]
 
     if m_name not in MODEL_LIST:
-        print(f"Model tidak dikenal. Pilih salah satu dari: {MODEL_LIST}")
+        print(f"[ERROR] Unknown model. Select one from {MODEL_LIST}")
         sys.exit(1)
 
     try:
@@ -145,4 +144,4 @@ if __name__ == "__main__":
         res = predict_single_image(model, img_path)
         print_prediction(res, display_name=m_name.upper())
     except Exception as e:
-        print(f"Terjadi kesalahan saat inferensi: {str(e)}")
+        print(f"[ERROR] Exception occurred during inference: {str(e)}")

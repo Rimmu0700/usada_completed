@@ -21,7 +21,7 @@
         "peak_vram_mb": 823.1,
         "params_m": 24.57,
         "flops_g": 4.14,
-        "inference_ms": 5.75,
+        "inference_ms": 5.82,
         "dataset_state": {
             "classes": [
                 "Alpinia galanga(L) willd.(angiberaceae)",
@@ -458,7 +458,7 @@
         "peak_vram_mb": 208.29,
         "params_m": 1.08,
         "flops_g": 0.06,
-        "inference_ms": 2.28,
+        "inference_ms": 4.37,
         "dataset_state": {
             "classes": [
                 "Alpinia galanga(L) willd.(angiberaceae)",
@@ -913,7 +913,7 @@
         "peak_vram_mb": 790.75,
         "params_m": 86.0,
         "flops_g": 17.58,
-        "inference_ms": 11.98,
+        "inference_ms": 14.2,
         "dataset_state": {
             "classes": [
                 "Alpinia galanga(L) willd.(angiberaceae)",

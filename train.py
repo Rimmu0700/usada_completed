@@ -8,7 +8,6 @@ import torch.optim as optim
 from pathlib import Path
 from sklearn.metrics import f1_score
 import numpy as np
-
 from config import (
     DEVICE, NUM_EPOCHS, WEIGHT_DECAY,
     EARLY_STOP_PATIENCE, LR_PATIENCE, LR_FACTOR, LR_MIN,
@@ -21,13 +20,13 @@ from dataset import get_dataloaders
 from model import build_model, get_model_summary, unfreeze_layer, get_unfreeze_schedule
 from profiler import GPUMemoryTracker, EpochTimer, get_gpu_info
 
+# Initialize backend frameworks and verify required directories are generated
 def setup_environment(dirs: dict):
     if torch.cuda.is_available():
         torch.backends.cudnn.benchmark = CUDNN_BENCHMARK
         torch.backends.cudnn.deterministic = False
     for d in [dirs["log_dir"], dirs["checkpoint_dir"], dirs["metrics_dir"], dirs["plots_dir"]]:
         Path(d).mkdir(parents=True, exist_ok=True)
-    print(f"\nDevice: {DEVICE}")
 
 # Single source of truth for the BF16 autocast context used across train/val/inference.
 # USE_AMP is False automatically when CUDA is unavailable, in which case this context
@@ -42,6 +41,7 @@ def build_class_weights() -> torch.Tensor:
     weights = weights / weights.sum()
     return weights.to(DEVICE)
 
+# Track processing performance variables via dummy array feedforward loops
 def benchmark_inference(model) -> float:
     model.eval()
     dummy_input = torch.randn(1, 3, 224, 224).to(DEVICE)
@@ -88,6 +88,7 @@ def train_one_epoch(model, loader, criterion, optimizer) -> dict:
     epoch_f1 = f1_score(all_labels, all_preds, average="macro", zero_division=0)
     return {"loss": round(epoch_loss, 6), "accuracy": round(epoch_acc, 6), "f1": round(epoch_f1, 6)}
 
+# Run cross-validation evaluations to track precision behaviors without model updates
 def validate_one_epoch(model, loader, criterion) -> dict:
     model.eval()
     running_loss = 0.0
@@ -113,38 +114,25 @@ def validate_one_epoch(model, loader, criterion) -> dict:
     epoch_f1 = f1_score(all_labels, all_preds, average="macro", zero_division=0)
     return {"loss": round(epoch_loss, 6), "accuracy": round(epoch_acc, 6), "f1": round(epoch_f1, 6)}
 
+# Unfreeze progressive target backbone blocks based on milestone intervals
 def maybe_unfreeze(model, model_name: str, epoch: int, base_lr: float):
     schedule = get_unfreeze_schedule(model_name)
-
-    # [FIX] Epoch dipercepat: 5/10/15 agar layer terbuka
-    # sebelum early stopping terpicu
     unfreeze_points = {5: 0, 10: 1, 15: 2}
-
     if epoch not in unfreeze_points:
         return None
-
     idx = unfreeze_points[epoch]
     if idx >= len(schedule):
         return None
-
     layer_to_open = schedule[idx]
     unfreeze_layer(model, layer_to_open)
-
-    # [FIX] LR moderat — bukan 0.1^(idx+1) yang terlalu kecil
-    # Layer backbone butuh LR cukup besar untuk belajar
-    # tapi tidak merusak bobot pretrained
     lr_factors = {0: 0.3, 1: 0.1, 2: 0.03}
     new_lr = base_lr * lr_factors[idx]
-
     trainable_params = [p for p in model.parameters() if p.requires_grad]
-    new_optimizer = optim.Adam(
-        [{"params": trainable_params, "lr": new_lr}],
-        weight_decay=WEIGHT_DECAY
-    )
-
-    print(f"  [UNFREEZE] Epoch {epoch}: '{layer_to_open}' | lr: {new_lr:.2e}")
+    new_optimizer = optim.Adam([{"params": trainable_params, "lr": new_lr}], weight_decay=WEIGHT_DECAY)
+    print(f"[INFO] Unfreezing backbone layer: {layer_to_open}. Adjusted learning rate to {new_lr}")
     return new_optimizer
 
+# Run absolute optimization, tracking and logging histories for a single architecture
 def train_single_model(model_name: str) -> dict:
     dirs = get_output_dirs(model_name)
     setup_environment(dirs)
@@ -161,22 +149,23 @@ def train_single_model(model_name: str) -> dict:
     model = build_model(model_name)
     get_model_summary(model)
     
+    model = build_model(model_name)
     params_m = sum(p.numel() for p in model.parameters()) / 1000000.0
     flops_g = {"resnet50": 4.14, "mobilenet": 0.06, "vit": 17.58}.get(model_name, 0.0)
     inf_ms = benchmark_inference(model)
-
     dataset_state_current = {"classes": CLASS_NAMES, "counts": CLASS_RAW_COUNTS}
     dataset_changed = False
-    
     result_path = os.path.join(dirs["metrics_dir"], "train_result.json")
+
+    # Resume handling logic
     if os.path.exists(result_path):
         with open(result_path, "r") as f:
             res = json.load(f)
-        
         old_dataset_state = res.get("dataset_state", None)
         if old_dataset_state == dataset_state_current:
             hist = res.get("history", {})
             if "val_acc" in hist and len(hist["val_acc"]) > 0:
+                print(f"[INFO] Existing trained model found for {display_name}. Skipping re-training.")
                 res["best_val_acc"] = max(hist["val_acc"])
                 res["lowest_val_acc"] = min(hist["val_acc"])
                 res["avg_val_acc"] = round(float(np.mean(hist["val_acc"])), 4)
@@ -194,7 +183,6 @@ def train_single_model(model_name: str) -> dict:
                 res["inference_ms"] = round(inf_ms, 2)
                 with open(result_path, "w") as f:
                     json.dump(res, f, indent=4)
-                print(f"\nModel {display_name} sudah dilatih sebelumnya dengan dataset yang sama. Melewati proses training.")
                 del model
                 gc.collect()
                 if torch.cuda.is_available():
@@ -202,10 +190,8 @@ def train_single_model(model_name: str) -> dict:
                 return res
         else:
             dataset_changed = True
-            print(f"\nPerubahan dataset terdeteksi pada {display_name}. Memulai pelatihan ulang dari awal.")
 
     train_loader, val_loader, _ = get_dataloaders(batch_size=batch_size)
-
     if USE_CLASS_WEIGHTED_LOSS:
         class_weights = build_class_weights()
         criterion = nn.CrossEntropyLoss(weight=class_weights)
@@ -250,10 +236,11 @@ def train_single_model(model_name: str) -> dict:
             best_val_loss = checkpoint["val_loss"]
         if "history" in checkpoint:
             history = checkpoint["history"]
-        print(f"\nMelanjutkan training dari epoch {start_epoch}")
 
     total_start = time.perf_counter()
     epoch = start_epoch - 1
+
+    print(f"[INFO] Entering Epoch Iteration Loop. Target: {NUM_EPOCHS} Epochs.")
 
     for epoch in range(start_epoch, NUM_EPOCHS + 1):
         new_optimizer = maybe_unfreeze(model, model_name, epoch, learning_rate)
@@ -262,6 +249,7 @@ def train_single_model(model_name: str) -> dict:
             scheduler = optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer, mode="min", factor=LR_FACTOR, patience=LR_PATIENCE, min_lr=LR_MIN,
             )
+            
         mem_tracker.reset()
         epoch_timer.start()
         train_metrics = train_one_epoch(model, train_loader, criterion, optimizer)
@@ -281,11 +269,7 @@ def train_single_model(model_name: str) -> dict:
         history["gpu_vram_mb"].append(peak_vram)
         history["lr"].append(current_lr)
 
-        print(
-            f"{display_name} Epoch [{epoch:03d}/{NUM_EPOCHS}] "
-            f"Train Acc: {train_metrics['accuracy']:.4f} Val Acc: {val_metrics['accuracy']:.4f} "
-            f"Val F1: {val_metrics['f1']:.4f} Time: {epoch_secs:.1f}s VRAM: {peak_vram:.0f}MB"
-        )
+        print(f"[EPOCH {epoch:02d}/{NUM_EPOCHS}] Train Loss: {train_metrics['loss']:.4f} | Train Acc: {train_metrics['accuracy']:.4f} | Val Loss: {val_metrics['loss']:.4f} | Val Acc: {val_metrics['accuracy']:.4f} | LR: {current_lr:.6f} | Time: {epoch_secs:.1f}s")
 
         if val_metrics["loss"] < best_val_loss:
             best_val_loss = val_metrics["loss"]
@@ -300,10 +284,12 @@ def train_single_model(model_name: str) -> dict:
                 "val_f1": val_metrics["f1"],
                 "history": history,
             }, dirs["best_model_path"])
+            print(f"  -> [SAVE] Checkpoint updated. Best Validation Loss: {best_val_loss:.4f}")
         else:
             early_stop_count += 1
 
         if early_stop_count >= EARLY_STOP_PATIENCE:
+            print(f"\n[INFO] Early stopping triggered. No improvement for {EARLY_STOP_PATIENCE} epochs.")
             break
 
     if epoch >= start_epoch:
@@ -316,18 +302,20 @@ def train_single_model(model_name: str) -> dict:
         }, dirs["final_model_path"])
 
     total_time = time.perf_counter() - total_start
-    best_val_acc = max(history['val_acc'])
-    lowest_val_acc = min(history['val_acc'])
-    avg_val_acc = float(np.mean(history['val_acc']))
-    best_val_f1 = max(history['val_f1'])
-    lowest_val_f1 = min(history['val_f1'])
-    avg_val_f1 = float(np.mean(history['val_f1']))
-    avg_time = float(np.mean(history['epoch_time_s']))
-    lowest_time = float(min(history['epoch_time_s']))
-    peak_time = float(max(history['epoch_time_s']))
-    avg_vram = float(np.mean(history['gpu_vram_mb']))
-    peak_vram = float(max(history['gpu_vram_mb']))
-    lowest_vram = float(min(history['gpu_vram_mb']))
+    print(f"\n[SUCCESS] Training sequence completed for {display_name}. Total execution time: {total_time:.2f} seconds.")
+    
+    best_val_acc = max(history['val_acc']) if history['val_acc'] else 0
+    lowest_val_acc = min(history['val_acc']) if history['val_acc'] else 0
+    avg_val_acc = float(np.mean(history['val_acc'])) if history['val_acc'] else 0
+    best_val_f1 = max(history['val_f1']) if history['val_f1'] else 0
+    lowest_val_f1 = min(history['val_f1']) if history['val_f1'] else 0
+    avg_val_f1 = float(np.mean(history['val_f1'])) if history['val_f1'] else 0
+    avg_time = float(np.mean(history['epoch_time_s'])) if history['epoch_time_s'] else 0
+    lowest_time = float(min(history['epoch_time_s'])) if history['epoch_time_s'] else 0
+    peak_time = float(max(history['epoch_time_s'])) if history['epoch_time_s'] else 0
+    avg_vram = float(np.mean(history['gpu_vram_mb'])) if history['gpu_vram_mb'] else 0
+    peak_vram = float(max(history['gpu_vram_mb'])) if history['gpu_vram_mb'] else 0
+    lowest_vram = float(min(history['gpu_vram_mb'])) if history['gpu_vram_mb'] else 0
 
     result_json = {
         "model_name": model_name,
@@ -366,52 +354,22 @@ def train_single_model(model_name: str) -> dict:
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-
     return result_json
 
+# Global supervisor to loop and trigger single tracking routines across all architecture lists
 def train_all_models():
     all_results = {}
-    print(f"\nMEMULAI PERBANDINGAN {len(MODEL_LIST)} MODEL")
     for i, model_name in enumerate(MODEL_LIST, start=1):
         result = train_single_model(model_name)
         all_results[model_name] = result
-
-    print(f"\n{'='*130}")
-    print(f"{'Model':18s} | {'Akurasi (Best/Avg/Low)':<23s} | {'F1 (Best/Avg/Low)':<23s} | {'Waktu/Epc (Avg/Low)':<20s} | {'VRAM (Peak/Avg/Low)':<20s}")
-    print(f"{'-'*130}")
-    for model_name, res in all_results.items():
-        display_name = MODEL_INFO.get(model_name, {}).get("display_name", model_name)
-        acc_b = res.get('best_val_acc', 0) * 100
-        acc_a = res.get('avg_val_acc', 0) * 100
-        acc_l = res.get('lowest_val_acc', 0) * 100
-        f1_b = res.get('best_val_f1', 0) * 100
-        f1_a = res.get('avg_val_f1', 0) * 100
-        f1_l = res.get('lowest_val_f1', 0) * 100
-        trn_a = res.get('avg_epoch_time_s', 0)
-        trn_l = res.get('lowest_epoch_time_s', 0)
-        vrm_p = res.get('peak_vram_mb', 0)
-        vrm_a = res.get('avg_vram_mb', 0)
-        vrm_l = res.get('lowest_vram_mb', 0)
-        print(f"{display_name:18s} | {acc_b:>5.1f}% / {acc_a:>5.1f}% / {acc_l:>5.1f}% | {f1_b:>5.1f}% / {f1_a:>5.1f}% / {f1_l:>5.1f}% | {trn_a:>6.1f}s / {trn_l:>5.1f}s     | {vrm_p:>5.0f} / {vrm_a:>4.0f} / {vrm_l:>4.0f} MB")
-    
-    print(f"\n{'='*75}")
-    print(f"{'Model':18s} | {'Inference (ms)':<15s} | {'FLOPs (G)':<15s} | {'Params (M)':<15s}")
-    print(f"{'-'*75}")
-    for model_name, res in all_results.items():
-        display_name = MODEL_INFO.get(model_name, {}).get("display_name", model_name)
-        inf_t = res.get('inference_ms', 0)
-        flops = res.get('flops_g', 0)
-        params = res.get('params_m', 0)
-        print(f"{display_name:18s} | {inf_t:<15.2f} | {flops:<15.2f} | {params:<15.2f}")
-    print(f"{'='*75}")
-
-    from config import COMPARISON_DIR
     Path(COMPARISON_DIR).mkdir(parents=True, exist_ok=True)
     summary_path = os.path.join(COMPARISON_DIR, "training_comparison.json")
     with open(summary_path, "w") as f:
         json.dump(all_results, f, indent=4)
+    print(f"\n[INFO] All model architectures processed successfully. Compilation matrix saved to: {COMPARISON_DIR}")
     return all_results
 
+# Export tracking history logs into static visualization charts saved locally
 def _save_plots(history: dict, plots_dir: str, display_name: str):
     try:
         import matplotlib.pyplot as plt
