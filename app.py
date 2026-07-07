@@ -1,9 +1,16 @@
 import os
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
 import time
 import base64
 import collections
 from flask import Flask, request, jsonify, render_template
 import torch
+torch.set_num_threads(1)
 import torch.nn.functional as F
 import numpy as np
 import cv2
@@ -16,7 +23,6 @@ from ultralytics import YOLO
 from config import MODEL_LIST, DEVICE, CLASS_NAMES, NUM_CLASSES, get_output_dirs, YOLO_WEIGHTS_PATH, YOLO_CONF_THRESHOLD
 from model import build_model
 
-torch.set_num_threads(1)
 app = Flask(__name__)
 
 # Memuat 3 model klasifikasi
@@ -29,10 +35,10 @@ for m_name in MODEL_LIST:
     checkpoint_path = dirs["best_model_path"]
     if os.path.exists(checkpoint_path):
         try:
-            model = build_model(m_name, NUM_CLASSES)
-            checkpoint = torch.load(checkpoint_path, map_location=DEVICE)
-            if "model_state_dict" in checkpoint:
-                model.load_state_dict(checkpoint["model_state_dict"])
+            model = build_model(m_name)
+            checkpoint = torch.load(checkpoint_path, map_location=DEVICE, weights_only=False)
+            if "model_state" in checkpoint:
+                model.load_state_dict(checkpoint["model_state"])
             else:
                 model.load_state_dict(checkpoint)
             model.to(DEVICE)
@@ -67,21 +73,21 @@ def check_green_ratio(img_bgr):
 def generate_saliency_map(model, input_tensor, target_class, img_np):
     model.zero_grad()
     input_tensor.requires_grad_()
-    
+
     output = model(input_tensor)
     score = output[0, target_class]
     score.backward()
-    
+
     saliency, _ = torch.max(input_tensor.grad.data.abs(), dim=1)
     saliency = saliency[0].cpu().numpy()
-    
+
     saliency = (saliency - saliency.min()) / (saliency.max() - saliency.min() + 1e-8)
     saliency = cv2.resize(saliency, (img_np.shape[1], img_np.shape[0]))
     saliency = np.uint8(255 * saliency)
-    
+
     heatmap = cv2.applyColorMap(saliency, cv2.COLORMAP_JET)
     overlay = cv2.addWeighted(img_np, 0.6, heatmap, 0.4, 0)
-    
+
     _, buffer = cv2.imencode('.jpg', overlay)
     return f"data:image/jpeg;base64,{base64.b64encode(buffer).decode('utf-8')}"
 
@@ -106,13 +112,13 @@ def predict():
     img_data = base64.b64decode(b64_str)
     nparr = np.frombuffer(img_data, np.uint8)
     original_img_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    
+
     # -----------------------------------------------------------------
     # DETEKSI DAN POTONG AREA DAUN MENGGUNAKAN YOLO11
     # -----------------------------------------------------------------
     yolo_results = yolo_model(original_img_np, conf=YOLO_CONF_THRESHOLD, verbose=False)
     boxes = yolo_results[0].boxes
-    
+
     if len(boxes) > 0:
         box = boxes[0].xyxy[0].cpu().numpy()
         x1, y1, x2, y2 = map(int, box)
@@ -131,7 +137,7 @@ def predict():
     if green_ratio < 0.15:
         return jsonify({
             "global_status": {
-                "accepted": False, 
+                "accepted": False,
                 "ood_reason": f"Gambar ditolak. Komponen warna hijau pada objek hanya {green_ratio*100:.1f}% (Minimal 15%)."
             },
             "cropped_image": cropped_b64,
@@ -141,34 +147,34 @@ def predict():
 
     img_rgb = cv2.cvtColor(img_np, cv2.COLOR_BGR2RGB)
     img_tensor = transform(img_rgb).unsqueeze(0).to(DEVICE)
-    
+
     response_data = {
-        "global_status": {}, 
-        "models": {}, 
-        "cropped_image": cropped_b64, 
+        "global_status": {},
+        "models": {},
+        "cropped_image": cropped_b64,
         "yolo_status": yolo_status
     }
     predictions = []
     max_confidences = []
-    
+
     for m_name, model in loaded_models.items():
         t0 = time.time()
         with torch.no_grad():
             outputs = model(img_tensor)
-            
+
         inference_ms = (time.time() - t0) * 1000
         probs = F.softmax(outputs, dim=1)[0]
         entropy = -torch.sum(probs * torch.log(probs + 1e-6)).item()
         max_prob, predicted = torch.max(probs, 0)
-        
+
         heatmap_b64 = None
         try:
             heatmap_b64 = generate_saliency_map(model, img_tensor, predicted.item(), img_np)
         except Exception:
             pass
-        
+
         class_probs = {CLASS_NAMES[i]: float(probs[i]) for i in range(NUM_CLASSES)}
-        
+
         response_data["models"][m_name] = {
             "predicted": CLASS_NAMES[predicted.item()],
             "confidence": max_prob.item(),
@@ -178,10 +184,10 @@ def predict():
             "class_probs": class_probs,
             "heatmap_b64": heatmap_b64
         }
-        
+
         predictions.append(CLASS_NAMES[predicted.item()])
         max_confidences.append(max_prob.item())
-        
+
     if predictions:
         avg_confidence = sum(max_confidences) / len(max_confidences)
         if avg_confidence < 0.25:

@@ -13,7 +13,8 @@ from config import (
     EARLY_STOP_PATIENCE, LR_PATIENCE, LR_FACTOR, LR_MIN,
     CUDNN_BENCHMARK, CLASS_NAMES, CLASS_RAW_COUNTS,
     MODEL_LIST, MODEL_INFO, get_output_dirs, get_hyperparams,
-    USE_CLASS_WEIGHTED_LOSS, COMPARISON_DIR
+    USE_CLASS_WEIGHTED_LOSS, COMPARISON_DIR,
+    USE_AMP, AMP_DTYPE
 )
 from dataset import get_dataloaders
 from model import build_model, get_model_summary, unfreeze_layer, get_unfreeze_schedule
@@ -27,6 +28,12 @@ def setup_environment(dirs: dict):
     for d in [dirs["log_dir"], dirs["checkpoint_dir"], dirs["metrics_dir"], dirs["plots_dir"]]:
         Path(d).mkdir(parents=True, exist_ok=True)
 
+# Single source of truth for the BF16 autocast context used across train/val/inference.
+# USE_AMP is False automatically when CUDA is unavailable, in which case this context
+# manager becomes a no-op and everything runs in plain FP32 (CPU-safe by construction).
+def autocast_ctx():
+    return torch.autocast(device_type="cuda", dtype=AMP_DTYPE, enabled=USE_AMP)
+
 # Build custom target coefficient vectors corresponding to absolute category sizing variations
 def build_class_weights() -> torch.Tensor:
     counts = torch.tensor(CLASS_RAW_COUNTS, dtype=torch.float)
@@ -39,13 +46,13 @@ def benchmark_inference(model) -> float:
     model.eval()
     dummy_input = torch.randn(1, 3, 224, 224).to(DEVICE)
     for _ in range(10):
-        with torch.no_grad(), torch.amp.autocast(device_type="cuda", enabled=torch.cuda.is_available()):
+        with torch.no_grad(), autocast_ctx():
             model(dummy_input)
     if torch.cuda.is_available():
         torch.cuda.synchronize()
     t0 = time.perf_counter()
     for _ in range(50):
-        with torch.no_grad(), torch.amp.autocast(device_type="cuda", enabled=torch.cuda.is_available()):
+        with torch.no_grad(), autocast_ctx():
             model(dummy_input)
     if torch.cuda.is_available():
         torch.cuda.synchronize()
@@ -53,7 +60,7 @@ def benchmark_inference(model) -> float:
     return ((t1 - t0) / 50) * 1000
 
 # Execute forward processing and backpropagation update steps across isolated epoch cycles
-def train_one_epoch(model, loader, criterion, optimizer, scaler) -> dict:
+def train_one_epoch(model, loader, criterion, optimizer) -> dict:
     model.train()
     running_loss = 0.0
     correct = 0
@@ -63,14 +70,13 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler) -> dict:
     for images, labels in loader:
         images = images.to(DEVICE, non_blocking=True)
         labels = labels.to(DEVICE, non_blocking=True)
-        outputs = model(images)
-        loss = criterion(outputs, labels)
+        with autocast_ctx():
+            outputs = model(images)
+            loss = criterion(outputs, labels)
         optimizer.zero_grad(set_to_none=True)
-        scaler.scale(loss).backward()
-        scaler.unscale_(optimizer)
+        loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        scaler.step(optimizer)
-        scaler.update()
+        optimizer.step()
         running_loss += loss.item() * images.size(0)
         preds = torch.argmax(outputs, dim=1)
         correct += (preds == labels).sum().item()
@@ -94,8 +100,9 @@ def validate_one_epoch(model, loader, criterion) -> dict:
         for images, labels in loader:
             images = images.to(DEVICE, non_blocking=True)
             labels = labels.to(DEVICE, non_blocking=True)
-            outputs = model(images)
-            loss = criterion(outputs, labels)
+            with autocast_ctx():
+                outputs = model(images)
+                loss = criterion(outputs, labels)
             running_loss += loss.item() * images.size(0)
             preds = torch.argmax(outputs, dim=1)
             correct += (preds == labels).sum().item()
@@ -136,7 +143,11 @@ def train_single_model(model_name: str) -> dict:
     
     print(f"\n======================================================================")
     print(f"[INFO] Initializing Training Phase for Architecture: {display_name}")
+    print(f"[INFO] Mixed Precision: {'BF16 autocast (CUDA)' if USE_AMP else 'FP32 (CPU fallback)'}")
     print(f"======================================================================")
+    
+    model = build_model(model_name)
+    get_model_summary(model)
     
     model = build_model(model_name)
     params_m = sum(p.numel() for p in model.parameters()) / 1000000.0
@@ -192,7 +203,6 @@ def train_single_model(model_name: str) -> dict:
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=LR_FACTOR, patience=LR_PATIENCE, min_lr=LR_MIN,
     )
-    scaler = torch.amp.GradScaler("cuda", enabled=False)
     mem_tracker = GPUMemoryTracker()
     epoch_timer = EpochTimer()
 
@@ -242,7 +252,7 @@ def train_single_model(model_name: str) -> dict:
             
         mem_tracker.reset()
         epoch_timer.start()
-        train_metrics = train_one_epoch(model, train_loader, criterion, optimizer, scaler)
+        train_metrics = train_one_epoch(model, train_loader, criterion, optimizer)
         val_metrics = validate_one_epoch(model, val_loader, criterion)
         epoch_secs = epoch_timer.stop()
         peak_vram = mem_tracker.get_peak_mb()
@@ -312,6 +322,8 @@ def train_single_model(model_name: str) -> dict:
         "display_name": display_name,
         "batch_size": batch_size,
         "learning_rate": learning_rate,
+        "amp_enabled": USE_AMP,
+        "amp_dtype": str(AMP_DTYPE),
         "total_epochs_run": epoch,
         "total_time_s": round(total_time, 2),
         "best_val_loss": best_val_loss,
@@ -338,7 +350,7 @@ def train_single_model(model_name: str) -> dict:
         json.dump(result_json, f, indent=4)
 
     _save_plots(history, dirs["plots_dir"], display_name)
-    del model, optimizer, scaler
+    del model, optimizer
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()

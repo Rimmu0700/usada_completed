@@ -107,11 +107,13 @@ LR_FACTOR = 0.5
 LR_MIN = 1e-6
 EARLY_STOP_PATIENCE = 10
 
-# Structural hyperparameter overrides fine-tuned per individual architecture
+# Structural hyperparameter overrides fine-tuned per individual architecture.
+# Batch sizes increased from the previous FP32-safe values now that BF16 autocast
+# reduces activation memory footprint. Learning rates left untouched (unrelated to AMP).
 MODEL_HYPERPARAMS = {
-    "resnet50": {"batch_size": 8, "learning_rate": 0.0001},
-    "mobilenet": {"batch_size": 16, "learning_rate": 0.0005},
-    "vit": {"batch_size": 4, "learning_rate": 0.00003},
+    "resnet50": {"batch_size": 16, "learning_rate": 0.0001},
+    "mobilenet": {"batch_size": 32, "learning_rate": 0.0005},
+    "vit": {"batch_size": 8, "learning_rate": 0.00003},
 }
 
 # Helper function to dynamically pull specific model parameters safely
@@ -128,6 +130,12 @@ PIN_MEMORY = True if torch.cuda.is_available() else False
 CUDNN_BENCHMARK = True
 PRETRAINED = True
 FREEZE_BACKBONE = True
+
+# Automatic Mixed Precision configuration.
+# BF16 autocast only — no GradScaler required (see train.py::autocast_ctx).
+# USE_AMP is derived from CUDA availability so CPU runs automatically fall back to FP32.
+USE_AMP = torch.cuda.is_available()
+AMP_DTYPE = torch.bfloat16
 
 # Tracking limits parameters
 LOG_INTERVAL = 10
