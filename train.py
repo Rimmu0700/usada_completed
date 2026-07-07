@@ -14,12 +14,8 @@ from config import (
     EARLY_STOP_PATIENCE, LR_PATIENCE, LR_FACTOR, LR_MIN,
     CUDNN_BENCHMARK, CLASS_NAMES, CLASS_RAW_COUNTS,
     MODEL_LIST, MODEL_INFO, get_output_dirs, get_hyperparams,
-<<<<<<< Updated upstream
-    USE_CLASS_WEIGHTED_LOSS,
-=======
     USE_CLASS_WEIGHTED_LOSS, COMPARISON_DIR,
     USE_AMP, AMP_DTYPE
->>>>>>> Stashed changes
 )
 from dataset import get_dataloaders
 from model import build_model, get_model_summary, unfreeze_layer, get_unfreeze_schedule
@@ -33,8 +29,6 @@ def setup_environment(dirs: dict):
         Path(d).mkdir(parents=True, exist_ok=True)
     print(f"\nDevice: {DEVICE}")
 
-<<<<<<< Updated upstream
-=======
 # Single source of truth for the BF16 autocast context used across train/val/inference.
 # USE_AMP is False automatically when CUDA is unavailable, in which case this context
 # manager becomes a no-op and everything runs in plain FP32 (CPU-safe by construction).
@@ -42,7 +36,6 @@ def autocast_ctx():
     return torch.autocast(device_type="cuda", dtype=AMP_DTYPE, enabled=USE_AMP)
 
 # Build custom target coefficient vectors corresponding to absolute category sizing variations
->>>>>>> Stashed changes
 def build_class_weights() -> torch.Tensor:
     counts = torch.tensor(CLASS_RAW_COUNTS, dtype=torch.float)
     weights = 1.0 / counts
@@ -66,12 +59,8 @@ def benchmark_inference(model) -> float:
     t1 = time.perf_counter()
     return ((t1 - t0) / 50) * 1000
 
-<<<<<<< Updated upstream
-def train_one_epoch(model, loader, criterion, optimizer, scaler) -> dict:
-=======
 # Execute forward processing and backpropagation update steps across isolated epoch cycles
 def train_one_epoch(model, loader, criterion, optimizer) -> dict:
->>>>>>> Stashed changes
     model.train()
     running_loss = 0.0
     correct = 0
@@ -164,14 +153,11 @@ def train_single_model(model_name: str) -> dict:
     learning_rate = hp["learning_rate"]
     display_name = MODEL_INFO.get(model_name, {}).get("display_name", model_name)
     
-<<<<<<< Updated upstream
-=======
     print(f"\n======================================================================")
     print(f"[INFO] Initializing Training Phase for Architecture: {display_name}")
     print(f"[INFO] Mixed Precision: {'BF16 autocast (CUDA)' if USE_AMP else 'FP32 (CPU fallback)'}")
     print(f"======================================================================")
     
->>>>>>> Stashed changes
     model = build_model(model_name)
     get_model_summary(model)
     
@@ -376,12 +362,7 @@ def train_single_model(model_name: str) -> dict:
         json.dump(result_json, f, indent=4)
 
     _save_plots(history, dirs["plots_dir"], display_name)
-<<<<<<< Updated upstream
-
-    del model, optimizer, scaler
-=======
     del model, optimizer
->>>>>>> Stashed changes
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()

@@ -29,22 +29,12 @@ def load_model_for_inference(model_name: str) -> nn.Module:
 
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError(f"Checkpoint untuk {model_name} tidak ditemukan di: {checkpoint_path}")
-<<<<<<< Updated upstream
-        
-    num_classes = len(CLASS_NAMES)
-    model = build_model(model_name, num_classes)
-    
-    checkpoint = torch.load(checkpoint_path, map_location=DEVICE)
-    if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
-        model.load_state_dict(checkpoint["model_state_dict"])
-=======
 
     model = build_model(model_name)
 
     checkpoint = torch.load(checkpoint_path, map_location=DEVICE, weights_only=False)
     if isinstance(checkpoint, dict) and "model_state" in checkpoint:
         model.load_state_dict(checkpoint["model_state"])
->>>>>>> Stashed changes
     else:
         model.load_state_dict(checkpoint)
 
@@ -142,16 +132,6 @@ if __name__ == "__main__":
         print("Penggunaan: python inference.py <nama_model> <path_gambar>")
         print(f"Pilihan model: {MODEL_LIST}")
         sys.exit(1)
-<<<<<<< Updated upstream
-        
-    m_name = sys.argv[1]
-    img_path = sys.argv[2]
-    
-    if m_name not in MODEL_LIST:
-        print(f"Model tidak dikenal. Pilih salah satu dari: {MODEL_LIST}")
-        sys.exit(1)
-        
-=======
 
     m_name = sys.argv[1]
     img_path = sys.argv[2]
@@ -160,7 +140,6 @@ if __name__ == "__main__":
         print(f"Model tidak dikenal. Pilih salah satu dari: {MODEL_LIST}")
         sys.exit(1)
 
->>>>>>> Stashed changes
     try:
         model = load_model_for_inference(m_name)
         res = predict_single_image(model, img_path)
