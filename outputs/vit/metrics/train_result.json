@@ -20,7 +20,7 @@
     "peak_vram_mb": 790.75,
     "params_m": 86.0,
     "flops_g": 17.58,
-    "inference_ms": 11.98,
+    "inference_ms": 14.2,
     "dataset_state": {
         "classes": [
             "Alpinia galanga(L) willd.(angiberaceae)",
