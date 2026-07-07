@@ -26,9 +26,10 @@ inference_transform = T.Compose([
 def load_model_for_inference(model_name: str) -> nn.Module:
     dirs = get_output_dirs(model_name)
     checkpoint_path = dirs["best_model_path"]
-    
+
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError(f"Checkpoint untuk {model_name} tidak ditemukan di: {checkpoint_path}")
+<<<<<<< Updated upstream
         
     num_classes = len(CLASS_NAMES)
     model = build_model(model_name, num_classes)
@@ -36,9 +37,17 @@ def load_model_for_inference(model_name: str) -> nn.Module:
     checkpoint = torch.load(checkpoint_path, map_location=DEVICE)
     if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
         model.load_state_dict(checkpoint["model_state_dict"])
+=======
+
+    model = build_model(model_name)
+
+    checkpoint = torch.load(checkpoint_path, map_location=DEVICE, weights_only=False)
+    if isinstance(checkpoint, dict) and "model_state" in checkpoint:
+        model.load_state_dict(checkpoint["model_state"])
+>>>>>>> Stashed changes
     else:
         model.load_state_dict(checkpoint)
-        
+
     model.to(DEVICE)
     model.eval()
     return model
@@ -54,7 +63,7 @@ def predict_single_image(model: nn.Module, image_path: str) -> dict:
     img_np = np.array(img)
     yolo_results = yolo_model(img_np, conf=YOLO_CONF_THRESHOLD, verbose=False)
     boxes = yolo_results[0].boxes
-    
+
     if len(boxes) > 0:
         box = boxes[0].xyxy[0].cpu().numpy()
         x1, y1, x2, y2 = map(int, box)
@@ -133,6 +142,7 @@ if __name__ == "__main__":
         print("Penggunaan: python inference.py <nama_model> <path_gambar>")
         print(f"Pilihan model: {MODEL_LIST}")
         sys.exit(1)
+<<<<<<< Updated upstream
         
     m_name = sys.argv[1]
     img_path = sys.argv[2]
@@ -141,6 +151,16 @@ if __name__ == "__main__":
         print(f"Model tidak dikenal. Pilih salah satu dari: {MODEL_LIST}")
         sys.exit(1)
         
+=======
+
+    m_name = sys.argv[1]
+    img_path = sys.argv[2]
+
+    if m_name not in MODEL_LIST:
+        print(f"Model tidak dikenal. Pilih salah satu dari: {MODEL_LIST}")
+        sys.exit(1)
+
+>>>>>>> Stashed changes
     try:
         model = load_model_for_inference(m_name)
         res = predict_single_image(model, img_path)
