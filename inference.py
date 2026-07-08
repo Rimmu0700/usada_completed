@@ -24,18 +24,24 @@ inference_transform = T.Compose([
 def load_model_for_inference(model_name: str) -> nn.Module:
     dirs = get_output_dirs(model_name)
     checkpoint_path = dirs["best_model_path"]
-
+    
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError(f"Checkpoint untuk {model_name} tidak ditemukan di: {checkpoint_path}")
-
-    model = build_model(model_name)
-
+        
+    num_classes = len(CLASS_NAMES)
+    model = build_model(model_name, num_classes)
+    
     checkpoint = torch.load(checkpoint_path, map_location=DEVICE, weights_only=False)
-    if isinstance(checkpoint, dict) and "model_state" in checkpoint:
-        model.load_state_dict(checkpoint["model_state"])
+    
+    # --- FIX 1: PENCOCOKAN KEY CHECKPOINT ---
+    if isinstance(checkpoint, dict):
+        if "model_state" in checkpoint:
+            model.load_state_dict(checkpoint["model_state"])
+        elif "model_state_dict" in checkpoint:
+            model.load_state_dict(checkpoint["model_state_dict"])
     else:
         model.load_state_dict(checkpoint)
-
+        
     model.to(DEVICE)
     model.eval()
     return model
@@ -57,8 +63,14 @@ def predict_single_image(model: nn.Module, image_path: str) -> dict:
         box = boxes[0].xyxy[0].cpu().numpy()
         x1, y1, x2, y2 = map(int, box)
         cropped_img_np = img_np[y1:y2, x1:x2]
-        img = Image.fromarray(cropped_img_np)
-        yolo_status = f"Leaf Detected - Crop Target: {img.size[0]}x{img.size[1]}px"
+        
+        # --- FIX 3: AMANKAN CROP ---
+        if cropped_img_np.size == 0:
+            img = Image.fromarray(img_np)
+            yolo_status = "Dimensi daun invalid (Menggunakan Gambar Penuh)"
+        else:
+            img = Image.fromarray(cropped_img_np)
+            yolo_status = f"Terdeteksi Daun (Crop: {img.size[0]}x{img.size[1]})"
     else:
         yolo_status = "Leaf not detected by YOLO. Defaulting to full image."
 
