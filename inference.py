@@ -29,7 +29,7 @@ def load_model_for_inference(model_name: str) -> nn.Module:
         raise FileNotFoundError(f"Checkpoint untuk {model_name} tidak ditemukan di: {checkpoint_path}")
         
     num_classes = len(CLASS_NAMES)
-    model = build_model(model_name, num_classes)
+    model = build_model(model_name)
     
     checkpoint = torch.load(checkpoint_path, map_location=DEVICE, weights_only=False)
     
