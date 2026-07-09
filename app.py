@@ -35,7 +35,7 @@ for m_name in MODEL_LIST:
     checkpoint_path = dirs["best_model_path"]
     if os.path.exists(checkpoint_path):
         try:
-            model = build_model(m_name, NUM_CLASSES)
+            model = build_model(m_name)
             checkpoint = torch.load(checkpoint_path, map_location=DEVICE, weights_only=False)
             
             # --- FIX 1: PENCOCOKAN KEY CHECKPOINT ---
