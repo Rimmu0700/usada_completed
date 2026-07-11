@@ -2,6 +2,7 @@ import os
 import gc
 import json
 import time
+import random
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -14,19 +15,37 @@ from config import (
     CUDNN_BENCHMARK, CLASS_NAMES, CLASS_RAW_COUNTS,
     MODEL_LIST, MODEL_INFO, get_output_dirs, get_hyperparams,
     USE_CLASS_WEIGHTED_LOSS, COMPARISON_DIR,
-    USE_AMP, AMP_DTYPE
+    USE_AMP, AMP_DTYPE, RANDOM_SEED,
 )
 from dataset import get_dataloaders
 from model import build_model, get_model_summary, unfreeze_layer, get_unfreeze_schedule
 from profiler import GPUMemoryTracker, EpochTimer, get_gpu_info
 
+
+# --- FIX SEED: kunci semua sumber angka acak sebelum training dimulai ---
+# Tanpa ini, inisialisasi bobot, urutan dropout, dan transform augmentasi acak
+# (RandomHorizontalFlip, RandomRotation, dll di dataset.py) akan berbeda setiap
+# run meskipun kode & data sama persis, sehingga hasil training (jumlah epoch
+# sampai early-stop, loss/acc per epoch) jadi tidak bisa dibandingkan apple-to-apple.
+def set_seed(seed: int = RANDOM_SEED):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    # deterministic=True + benchmark=False: training sedikit lebih lambat di GPU,
+    # tapi hasil (angka loss/acc, epoch early-stop) jadi reproducible 100%.
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
 # Initialize backend frameworks and verify required directories are generated
 def setup_environment(dirs: dict):
-    if torch.cuda.is_available():
-        torch.backends.cudnn.benchmark = CUDNN_BENCHMARK
-        torch.backends.cudnn.deterministic = False
+    # NOTE: pengaturan cudnn.benchmark/deterministic SUDAH ditangani oleh set_seed().
+    # Baris ini sengaja tidak lagi memaksa deterministic=False, karena itu akan
+    # menimpa/membatalkan pengaturan reproducibility yang sudah di-set di set_seed().
     for d in [dirs["log_dir"], dirs["checkpoint_dir"], dirs["metrics_dir"], dirs["plots_dir"]]:
         Path(d).mkdir(parents=True, exist_ok=True)
+
 
 # Single source of truth for the BF16 autocast context used across train/val/inference.
 # USE_AMP is False automatically when CUDA is unavailable, in which case this context
@@ -34,12 +53,14 @@ def setup_environment(dirs: dict):
 def autocast_ctx():
     return torch.autocast(device_type="cuda", dtype=AMP_DTYPE, enabled=USE_AMP)
 
+
 # Build custom target coefficient vectors corresponding to absolute category sizing variations
 def build_class_weights() -> torch.Tensor:
     counts = torch.tensor(CLASS_RAW_COUNTS, dtype=torch.float)
     weights = 1.0 / counts
     weights = weights / weights.sum()
     return weights.to(DEVICE)
+
 
 # Track processing performance variables via dummy array feedforward loops
 def benchmark_inference(model) -> float:
@@ -58,6 +79,7 @@ def benchmark_inference(model) -> float:
         torch.cuda.synchronize()
     t1 = time.perf_counter()
     return ((t1 - t0) / 50) * 1000
+
 
 # Execute forward processing and backpropagation update steps across isolated epoch cycles
 def train_one_epoch(model, loader, criterion, optimizer) -> dict:
@@ -88,6 +110,7 @@ def train_one_epoch(model, loader, criterion, optimizer) -> dict:
     epoch_f1 = f1_score(all_labels, all_preds, average="macro", zero_division=0)
     return {"loss": round(epoch_loss, 6), "accuracy": round(epoch_acc, 6), "f1": round(epoch_f1, 6)}
 
+
 # Run cross-validation evaluations to track precision behaviors without model updates
 def validate_one_epoch(model, loader, criterion) -> dict:
     model.eval()
@@ -114,6 +137,7 @@ def validate_one_epoch(model, loader, criterion) -> dict:
     epoch_f1 = f1_score(all_labels, all_preds, average="macro", zero_division=0)
     return {"loss": round(epoch_loss, 6), "accuracy": round(epoch_acc, 6), "f1": round(epoch_f1, 6)}
 
+
 # Unfreeze progressive target backbone blocks based on milestone intervals
 def maybe_unfreeze(model, model_name: str, epoch: int, base_lr: float):
     schedule = get_unfreeze_schedule(model_name)
@@ -132,24 +156,30 @@ def maybe_unfreeze(model, model_name: str, epoch: int, base_lr: float):
     print(f"[INFO] Unfreezing backbone layer: {layer_to_open}. Adjusted learning rate to {new_lr}")
     return new_optimizer
 
+
 # Run absolute optimization, tracking and logging histories for a single architecture
 def train_single_model(model_name: str) -> dict:
+    # --- FIX SEED: seed ulang tiap kali mulai training 1 arsitektur, supaya urutan
+    # inisialisasi bobot & augmentasi konsisten walau dijalankan resume/terpisah per model.
+    set_seed()
+
     dirs = get_output_dirs(model_name)
     setup_environment(dirs)
     hp = get_hyperparams(model_name)
     batch_size = hp["batch_size"]
     learning_rate = hp["learning_rate"]
     display_name = MODEL_INFO.get(model_name, {}).get("display_name", model_name)
-    
+
     print(f"\n======================================================================")
     print(f"[INFO] Initializing Training Phase for Architecture: {display_name}")
     print(f"[INFO] Mixed Precision: {'BF16 autocast (CUDA)' if USE_AMP else 'FP32 (CPU fallback)'}")
     print(f"======================================================================")
-    
+
+    # --- FIX: build_model sebelumnya dipanggil 2x berturut-turut (baris kedua
+    # menimpa hasil pertama secara sia-sia, buang waktu + memori). Sekarang cukup 1x.
     model = build_model(model_name)
     get_model_summary(model)
-    
-    model = build_model(model_name)
+
     params_m = sum(p.numel() for p in model.parameters()) / 1000000.0
     flops_g = {"resnet50": 4.14, "mobilenet": 0.06, "vit": 17.58}.get(model_name, 0.0)
     inf_ms = benchmark_inference(model)
@@ -249,7 +279,7 @@ def train_single_model(model_name: str) -> dict:
             scheduler = optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer, mode="min", factor=LR_FACTOR, patience=LR_PATIENCE, min_lr=LR_MIN,
             )
-            
+
         mem_tracker.reset()
         epoch_timer.start()
         train_metrics = train_one_epoch(model, train_loader, criterion, optimizer)
@@ -303,7 +333,7 @@ def train_single_model(model_name: str) -> dict:
 
     total_time = time.perf_counter() - total_start
     print(f"\n[SUCCESS] Training sequence completed for {display_name}. Total execution time: {total_time:.2f} seconds.")
-    
+
     best_val_acc = max(history['val_acc']) if history['val_acc'] else 0
     lowest_val_acc = min(history['val_acc']) if history['val_acc'] else 0
     avg_val_acc = float(np.mean(history['val_acc'])) if history['val_acc'] else 0
@@ -356,6 +386,7 @@ def train_single_model(model_name: str) -> dict:
         torch.cuda.empty_cache()
     return result_json
 
+
 # Global supervisor to loop and trigger single tracking routines across all architecture lists
 def train_all_models():
     all_results = {}
@@ -368,6 +399,7 @@ def train_all_models():
         json.dump(all_results, f, indent=4)
     print(f"\n[INFO] All model architectures processed successfully. Compilation matrix saved to: {COMPARISON_DIR}")
     return all_results
+
 
 # Export tracking history logs into static visualization charts saved locally
 def _save_plots(history: dict, plots_dir: str, display_name: str):
@@ -405,6 +437,7 @@ def _save_plots(history: dict, plots_dir: str, display_name: str):
         plt.close()
     except ImportError:
         pass
+
 
 if __name__ == "__main__":
     train_all_models()

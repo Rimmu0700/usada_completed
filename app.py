@@ -35,9 +35,10 @@ for m_name in MODEL_LIST:
     checkpoint_path = dirs["best_model_path"]
     if os.path.exists(checkpoint_path):
         try:
+            # FIX: build_model hanya menerima 1 argumen (model_name)
             model = build_model(m_name)
             checkpoint = torch.load(checkpoint_path, map_location=DEVICE, weights_only=False)
-            
+
             # --- FIX 1: PENCOCOKAN KEY CHECKPOINT ---
             if "model_state" in checkpoint:
                 model.load_state_dict(checkpoint["model_state"])
@@ -45,15 +46,15 @@ for m_name in MODEL_LIST:
                 model.load_state_dict(checkpoint["model_state_dict"])
             else:
                 model.load_state_dict(checkpoint)
-                
+
             model.to(DEVICE)
             model.eval()
-            
+
             # --- FIX 2: PENCEGAHAN VRAM LEAK PADA SALIENCY MAP ---
             # Matikan gradien untuk semua bobot agar hemat memori saat inferensi
             for param in model.parameters():
                 param.requires_grad = False
-                
+
             loaded_models[m_name] = model
             print(f"Berhasil memuat model klasifikasi: {m_name}")
         except Exception as e:
@@ -72,6 +73,7 @@ transform = transforms.Compose([
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
+
 def check_green_ratio(img_bgr):
     hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
     lower_green = np.array([35, 40, 40])
@@ -80,6 +82,25 @@ def check_green_ratio(img_bgr):
     green_pixels = cv2.countNonZero(mask)
     total_pixels = img_bgr.shape[0] * img_bgr.shape[1]
     return green_pixels / total_pixels if total_pixels > 0 else 0.0
+
+
+def draw_yolo_box(img_bgr, x1, y1, x2, y2, label="YOLO: Area Crop"):
+    """Menggambar kotak bounding box merah + label pada gambar PENUH (bukan hasil crop)."""
+    annotated = img_bgr.copy()
+    color = (0, 0, 255)  # merah (format BGR)
+    h, w = img_bgr.shape[:2]
+    thickness = max(2, int(min(h, w) / 200))
+
+    cv2.rectangle(annotated, (x1, y1), (x2, y2), color, thickness)
+
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = max(0.5, min(h, w) / 900)
+    (text_w, text_h), _ = cv2.getTextSize(label, font, font_scale, 2)
+    label_y1 = max(0, y1 - text_h - 12)
+    cv2.rectangle(annotated, (x1, label_y1), (x1 + text_w + 12, y1), color, -1)
+    cv2.putText(annotated, label, (x1 + 6, y1 - 6), font, font_scale, (255, 255, 255), 2, cv2.LINE_AA)
+    return annotated
+
 
 def generate_saliency_map(model, input_tensor, target_class, img_np):
     model.zero_grad()
@@ -102,13 +123,16 @@ def generate_saliency_map(model, input_tensor, target_class, img_np):
     _, buffer = cv2.imencode('.jpg', overlay)
     return f"data:image/jpeg;base64,{base64.b64encode(buffer).decode('utf-8')}"
 
+
 @app.route("/")
 def index():
     return render_template("index.html")
 
+
 @app.route("/models/status")
 def status():
     return jsonify({"loaded_models": list(loaded_models.keys())})
+
 
 @app.route("/predict", methods=["POST"])
 def predict():
@@ -125,27 +149,39 @@ def predict():
     original_img_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
     # -----------------------------------------------------------------
-    # DETEKSI DAN POTONG AREA DAUN MENGGUNAKAN YOLO11
+    # DETEKSI AREA DAUN MENGGUNAKAN YOLO11
+    # -> Menghasilkan 2 gambar terpisah:
+    #    1. annotated_np : gambar PENUH + kotak merah (untuk ditampilkan, Tahap 1)
+    #    2. img_np       : hasil CROP dekat area itu (untuk ditampilkan Tahap 2,
+    #                       dan juga jadi input ke model klasifikasi)
     # -----------------------------------------------------------------
     yolo_results = yolo_model(original_img_np, conf=YOLO_CONF_THRESHOLD, verbose=False)
     boxes = yolo_results[0].boxes
 
+    annotated_np = original_img_np.copy()
+
     if len(boxes) > 0:
         box = boxes[0].xyxy[0].cpu().numpy()
         x1, y1, x2, y2 = map(int, box)
-        img_np = original_img_np[y1:y2, x1:x2]
-        
+        cropped_np = original_img_np[y1:y2, x1:x2]
+
         # --- FIX 3: PENCEGAHAN CRASH OPENCV (ZERO-DIMENSION) ---
-        if img_np.size == 0:
+        if cropped_np.size == 0:
             img_np = original_img_np.copy()
             yolo_status = "Daun terdeteksi tapi dimensi tidak valid. Menggunakan gambar penuh."
         else:
+            img_np = cropped_np
+            annotated_np = draw_yolo_box(original_img_np, x1, y1, x2, y2)
             yolo_status = f"Daun terdeteksi di koordinat ({x1}, {y1}) hingga ({x2}, {y2})."
     else:
         img_np = original_img_np.copy()
         yolo_status = "Daun tidak terdeteksi oleh YOLO11. Menggunakan gambar penuh sebagai fallback."
 
-    # Konversi hasil crop ke Base64 untuk UI web
+    # Gambar 1: gambar penuh + kotak merah (Tahap 1: Deteksi)
+    _, annotated_buffer = cv2.imencode('.jpg', annotated_np)
+    annotated_b64 = f"data:image/jpeg;base64,{base64.b64encode(annotated_buffer).decode('utf-8')}"
+
+    # Gambar 2: hasil crop dekat (Tahap 2: Fokus Area) -> juga input klasifikasi
     _, crop_buffer = cv2.imencode('.jpg', img_np)
     cropped_b64 = f"data:image/jpeg;base64,{base64.b64encode(crop_buffer).decode('utf-8')}"
     # -----------------------------------------------------------------
@@ -157,6 +193,7 @@ def predict():
                 "accepted": False,
                 "ood_reason": f"Gambar ditolak. Komponen warna hijau pada objek hanya {green_ratio*100:.1f}% (Minimal 15%)."
             },
+            "annotated_image": annotated_b64,
             "cropped_image": cropped_b64,
             "yolo_status": yolo_status,
             "models": {}
@@ -168,6 +205,7 @@ def predict():
     response_data = {
         "global_status": {},
         "models": {},
+        "annotated_image": annotated_b64,
         "cropped_image": cropped_b64,
         "yolo_status": yolo_status
     }
@@ -218,6 +256,7 @@ def predict():
         response_data["global_status"] = {"accepted": False, "ood_reason": "Proses inferensi klasifikasi gagal."}
 
     return jsonify(response_data)
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 7860))
