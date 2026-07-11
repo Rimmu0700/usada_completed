@@ -1,3 +1,4 @@
+
 import os
 import sys
 import time
@@ -24,36 +25,57 @@ inference_transform = T.Compose([
 def load_model_for_inference(model_name: str) -> nn.Module:
     dirs = get_output_dirs(model_name)
     checkpoint_path = dirs["best_model_path"]
-    
+
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError(f"Checkpoint untuk {model_name} tidak ditemukan di: {checkpoint_path}")
-        
-    num_classes = len(CLASS_NAMES)
+
+    # FIX: build_model hanya menerima 1 argumen (model_name)
     model = build_model(model_name)
-    
+
     checkpoint = torch.load(checkpoint_path, map_location=DEVICE, weights_only=False)
-    
+
     # --- FIX 1: PENCOCOKAN KEY CHECKPOINT ---
     if isinstance(checkpoint, dict):
         if "model_state" in checkpoint:
             model.load_state_dict(checkpoint["model_state"])
         elif "model_state_dict" in checkpoint:
             model.load_state_dict(checkpoint["model_state_dict"])
+        else:
+            model.load_state_dict(checkpoint)
     else:
         model.load_state_dict(checkpoint)
-        
+
     model.to(DEVICE)
     model.eval()
     return model
 
+
+def draw_yolo_box(img_np_rgb, x1, y1, x2, y2, label="YOLO: Area Crop"):
+    """Menggambar kotak deteksi merah di atas gambar PENUH (dipakai untuk preview/CLI)."""
+    import cv2
+    img_bgr = cv2.cvtColor(img_np_rgb, cv2.COLOR_RGB2BGR)
+    color = (0, 0, 255)
+    h, w = img_bgr.shape[:2]
+    thickness = max(2, int(min(h, w) / 200))
+    cv2.rectangle(img_bgr, (x1, y1), (x2, y2), color, thickness)
+
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = max(0.5, min(h, w) / 900)
+    (text_w, text_h), _ = cv2.getTextSize(label, font, font_scale, 2)
+    label_y1 = max(0, y1 - text_h - 12)
+    cv2.rectangle(img_bgr, (x1, label_y1), (x1 + text_w + 12, y1), color, -1)
+    cv2.putText(img_bgr, label, (x1 + 6, y1 - 6), font, font_scale, (255, 255, 255), 2, cv2.LINE_AA)
+    return cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+
+
 # Run end-to-end inference including detection and classification
-def predict_single_image(model: nn.Module, image_path: str) -> dict:
+def predict_single_image(model: nn.Module, image_path: str, save_annotated_path: str = None) -> dict:
     if not os.path.exists(image_path):
         raise FileNotFoundError(f"Image not found at {image_path}")
 
     img = Image.open(image_path).convert("RGB")
     original_size = img.size
-    
+
     # Run YOLO detection for auto-cropping
     img_np = np.array(img)
     yolo_results = yolo_model(img_np, conf=YOLO_CONF_THRESHOLD, verbose=False)
@@ -63,13 +85,18 @@ def predict_single_image(model: nn.Module, image_path: str) -> dict:
         box = boxes[0].xyxy[0].cpu().numpy()
         x1, y1, x2, y2 = map(int, box)
         cropped_img_np = img_np[y1:y2, x1:x2]
-        
+
         # --- FIX 3: AMANKAN CROP ---
         if cropped_img_np.size == 0:
             img = Image.fromarray(img_np)
             yolo_status = "Dimensi daun invalid (Menggunakan Gambar Penuh)"
         else:
-            img = Image.fromarray(cropped_img_np)
+            # Opsional: simpan gambar penuh + kotak merah untuk keperluan verifikasi visual
+            if save_annotated_path:
+                annotated = draw_yolo_box(img_np, x1, y1, x2, y2)
+                Image.fromarray(annotated).save(save_annotated_path)
+
+            img = Image.fromarray(cropped_img_np)  # ini yang dipakai untuk klasifikasi
             yolo_status = f"Terdeteksi Daun (Crop: {img.size[0]}x{img.size[1]})"
     else:
         yolo_status = "Leaf not detected by YOLO. Defaulting to full image."
@@ -116,6 +143,7 @@ def predict_single_image(model: nn.Module, image_path: str) -> dict:
         "yolo_status": yolo_status
     }
 
+
 # Display prediction output cleanly on the terminal
 def print_prediction(result: dict, display_name: str = ""):
     print("\n======================================================================")
@@ -138,6 +166,7 @@ def print_prediction(result: dict, display_name: str = ""):
         print(f"  {cls:35s}: {prob:6.2f}% {bar}{mark}")
     print("======================================================================")
 
+
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         print(f"Usage: python inference.py <model_name> <image_path>")
@@ -153,7 +182,9 @@ if __name__ == "__main__":
 
     try:
         model = load_model_for_inference(m_name)
-        res = predict_single_image(model, img_path)
+        annotated_out = os.path.splitext(img_path)[0] + "_yolo_annotated.jpg"
+        res = predict_single_image(model, img_path, save_annotated_path=annotated_out)
         print_prediction(res, display_name=m_name.upper())
+        print(f"  Gambar beranotasi disimpan di: {annotated_out}")
     except Exception as e:
         print(f"[ERROR] Exception occurred during inference: {str(e)}")

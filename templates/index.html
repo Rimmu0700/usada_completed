@@ -9,7 +9,7 @@
     <style>
         body { background-color: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         .main-card { border: none; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-        .preview-box { width: 100%; height: 260px; border: 2px dashed #cbd5e1; border-radius: 10px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #fff; position: relative; }
+        .preview-box { width: 100%; height: 220px; border: 2px dashed #cbd5e1; border-radius: 10px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #fff; position: relative; }
         .preview-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
         .model-card { border-left: 5px solid #2ecc71; background: #fff; transition: transform 0.2s; }
         .model-card:hover { transform: translateY(-2px); }
@@ -26,7 +26,7 @@
 
     <div class="card main-card p-4 bg-white mb-4">
         <div class="row g-4">
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <h5 class="fw-semibold mb-3"><i class="fa-solid fa-image me-2 text-primary"></i>Unggah Gambar Pengujian</h5>
                 <div class="mb-3">
                     <input class="form-file-input form-control" type="file" id="imageInput" accept="image/*">
@@ -43,17 +43,28 @@
                 </button>
             </div>
 
-            <div class="col-md-6">
-                <h5 class="fw-semibold mb-3"><i class="fa-solid fa-crop-simple me-2 text-warning"></i>Tahap 1: Deteksi Lokasi Daun (YOLO11)</h5>
+            <div class="col-md-4">
+                <h5 class="fw-semibold mb-3"><i class="fa-solid fa-vector-square me-2 text-warning"></i>Tahap 1: Deteksi Lokasi Daun (YOLO11)</h5>
+                <div class="preview-box">
+                    <img id="yoloAnnotatedPreview" src="" alt="" class="d-none">
+                    <div id="yoloAnnotatedPlaceholder" class="text-center text-muted">
+                        <i class="fa-solid fa-vector-square fa-3x mb-2 text-secondary"></i>
+                        <p class="mb-0">Gambar asli dengan kotak deteksi akan tampil di sini</p>
+                    </div>
+                </div>
+                <div class="alert alert-info mt-3 py-2" id="yoloStatusText" style="font-size: 0.85rem;">
+                    <i class="fa-solid fa-circle-info me-2"></i>Menunggu input gambar diproses...
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <h5 class="fw-semibold mb-3"><i class="fa-solid fa-crop-simple me-2 text-primary"></i>Tahap 2: Hasil Crop Area Fokus</h5>
                 <div class="preview-box">
                     <img id="yoloCropPreview" src="" alt="" class="d-none">
                     <div id="yoloPlaceholder" class="text-center text-muted">
-                        <i class="fa-solid fa-vector-square fa-3x mb-2 text-secondary"></i>
-                        <p class="mb-0">Area potongan daun terdeteksi akan tampil di sini</p>
+                        <i class="fa-solid fa-image fa-3x mb-2 text-secondary"></i>
+                        <p class="mb-0">Potongan daun yang diproses model akan tampil di sini</p>
                     </div>
-                </div>
-                <div class="alert alert-info mt-3 py-2" id="yoloStatusText" style="font-size: 0.9rem;">
-                    <i class="fa-solid fa-circle-info me-2"></i>Menunggu input gambar diproses...
                 </div>
             </div>
         </div>
@@ -70,7 +81,7 @@
     </div>
 
     <div id="resultsSection" class="d-none">
-        <h4 class="fw-bold text-dark mb-3"><i class="fa-solid fa-chart-bar me-2 text-success"></i>Tahap 2: Hasil Prediksi Spesies Daun</h4>
+        <h4 class="fw-bold text-dark mb-3"><i class="fa-solid fa-chart-bar me-2 text-success"></i>Tahap 3: Hasil Prediksi Spesies Daun</h4>
         <div class="row g-4" id="modelsGrid"></div>
     </div>
 </div>
@@ -80,7 +91,9 @@
     const inputPreview = document.getElementById('inputPreview');
     const uploadPlaceholder = document.getElementById('uploadPlaceholder');
     const btnAnalyze = document.getElementById('btnAnalyze');
-    
+
+    const yoloAnnotatedPreview = document.getElementById('yoloAnnotatedPreview');
+    const yoloAnnotatedPlaceholder = document.getElementById('yoloAnnotatedPlaceholder');
     const yoloCropPreview = document.getElementById('yoloCropPreview');
     const yoloPlaceholder = document.getElementById('yoloPlaceholder');
     const yoloStatusText = document.getElementById('yoloStatusText');
@@ -108,8 +121,13 @@
             // Reset komponen output
             resultsSection.classList.add('d-none');
             errorAlert.classList.add('d-none');
+
+            yoloAnnotatedPreview.classList.add('d-none');
+            yoloAnnotatedPlaceholder.classList.remove('d-none');
+
             yoloCropPreview.classList.add('d-none');
             yoloPlaceholder.classList.remove('d-none');
+
             yoloStatusText.innerHTML = '<i class="fa-solid fa-circle-info me-2"></i>Gambar siap diproses. Silakan klik tombol analisis.';
         };
         reader.readAsDataURL(file);
@@ -129,12 +147,20 @@
             const data = await response.json();
             loadingIndicator.classList.add('d-none');
 
-            // Perbarui Tampilan Sisi YOLO11 Crop
+            // Tahap 1: gambar penuh + kotak deteksi
+            if (data.annotated_image) {
+                yoloAnnotatedPreview.src = data.annotated_image;
+                yoloAnnotatedPreview.classList.remove('d-none');
+                yoloAnnotatedPlaceholder.classList.add('d-none');
+            }
+
+            // Tahap 2: hasil crop dekat
             if (data.cropped_image) {
                 yoloCropPreview.src = data.cropped_image;
                 yoloCropPreview.classList.remove('d-none');
                 yoloPlaceholder.classList.add('d-none');
             }
+
             if (data.yolo_status) {
                 yoloStatusText.innerHTML = `<i class="fa-solid fa-square-check text-success me-2"></i><strong>YOLO11:</strong> ${data.yolo_status}`;
             }
@@ -151,7 +177,7 @@
             for (const [modelName, details] of Object.entries(data.models)) {
                 let probListHTML = "";
                 const sortedProbs = Object.entries(details.class_probs).sort((a,b) => b[1] - a[1]);
-                
+
                 sortedProbs.forEach(([className, val]) => {
                     const pct = (val * 100).toFixed(1);
                     const isSelected = className === details.predicted;

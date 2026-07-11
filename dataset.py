@@ -8,7 +8,8 @@ from config import (
     IMAGE_SIZE, MEAN, STD,
     NUM_WORKERS, PIN_MEMORY,
     CLASS_NAMES, CLASS_TO_IDX,
-    USE_WEIGHTED_SAMPLER
+    USE_WEIGHTED_SAMPLER,
+    RANDOM_SEED,
 )
 
 # Training pipeline transformation rules implementing aggressive balance regularizations
@@ -37,6 +38,7 @@ test_transform = T.Compose([
     T.ToTensor(),
     T.Normalize(mean=MEAN, std=STD),
 ])
+
 
 # Core dataset loader parsing nested category layouts from storage arrays safely
 class PlantDataset(Dataset):
@@ -85,6 +87,7 @@ class PlantDataset(Dataset):
         sample_weights = [class_weights[CLASS_NAMES[label]] for _, label in self.samples]
         return sample_weights
 
+
 # Factory controller delivering production data streaming pipelines
 def get_dataloaders(batch_size: int = None):
     if batch_size is None:
@@ -95,11 +98,17 @@ def get_dataloaders(batch_size: int = None):
     val_dataset = PlantDataset(root_dir=VAL_DIR, transform=val_transform, split="val")
     test_dataset = PlantDataset(root_dir=TEST_DIR, transform=test_transform, split="test")
 
+    # --- FIX SEED: generator khusus supaya urutan shuffle/sampling deterministik ---
+    # DataLoader/WeightedRandomSampler punya generator acak sendiri yang TIDAK otomatis
+    # ikut ter-kunci oleh torch.manual_seed() global di train.py, jadi harus di-seed manual.
+    g = torch.Generator()
+    g.manual_seed(RANDOM_SEED)
+
     sampler = None
     shuffle = True
     if USE_WEIGHTED_SAMPLER:
         weights = train_dataset.get_sample_weights()
-        sampler = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
+        sampler = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True, generator=g)
         shuffle = False
 
     train_loader = DataLoader(
@@ -110,6 +119,7 @@ def get_dataloaders(batch_size: int = None):
         num_workers=NUM_WORKERS,
         pin_memory=PIN_MEMORY,
         drop_last=True,
+        generator=g if sampler is None else None,  # generator hanya valid dipakai salah satu: shuffle ATAU sampler
     )
 
     val_loader = DataLoader(

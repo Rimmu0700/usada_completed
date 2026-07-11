@@ -1,5 +1,5 @@
 venv/
-__pycache__/
+_pycache_/
 dataset_input/
 dataset_source/
 dataset_split/
@@ -10,3 +10,5 @@ results/
 .DS_Store
 *final_model.pth
 *.png
+*.pth
+*.pt
