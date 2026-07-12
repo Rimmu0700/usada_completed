@@ -108,8 +108,6 @@ LR_MIN = 1e-6
 EARLY_STOP_PATIENCE = 10
 
 # Structural hyperparameter overrides fine-tuned per individual architecture.
-# Batch sizes increased from the previous FP32-safe values now that BF16 autocast
-# reduces activation memory footprint. Learning rates left untouched (unrelated to AMP).
 MODEL_HYPERPARAMS = {
     "resnet50": {"batch_size": 16, "learning_rate": 0.0001},
     "mobilenet": {"batch_size": 32, "learning_rate": 0.0005},
@@ -132,8 +130,6 @@ PRETRAINED = True
 FREEZE_BACKBONE = True
 
 # Automatic Mixed Precision configuration.
-# BF16 autocast only — no GradScaler required (see train.py::autocast_ctx).
-# USE_AMP is derived from CUDA availability so CPU runs automatically fall back to FP32.
 USE_AMP = torch.cuda.is_available()
 AMP_DTYPE = torch.bfloat16
 
@@ -141,6 +137,20 @@ AMP_DTYPE = torch.bfloat16
 LOG_INTERVAL = 10
 SAVE_EVERY = 5
 
-# Object detection parameters for automated leaf segmentation
-YOLO_WEIGHTS_PATH = os.path.join(BASE_DIR, "weight", "yolo11x_leaf.pt")
+# --- AUTOMATIC FILE DETECTION LOGIC ---
+# This function automatically scans the entire project folder to find the weights file,
+# no matter where you or your friend decided to store it inside the project.
+def find_yolo_weights(filename="yolo11x_leaf.pt", search_root=BASE_DIR):
+    for root, dirs, files in os.walk(search_root):
+        if filename in files:
+            detected_path = os.path.join(root, filename)
+            print(f"[AUTO-DETECT] Found weights file at: {detected_path}")
+            return detected_path
+    
+    # Default fallback path if it cannot be found anywhere in the directory tree
+    print(f"[WARNING] '{filename}' not found anywhere in {search_root}. Using default fallback.")
+    return os.path.join(search_root, "weight", filename)
+
+# Automatically find and set the path
+YOLO_WEIGHTS_PATH = find_yolo_weights()
 YOLO_CONF_THRESHOLD = 0.15

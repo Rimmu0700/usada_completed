@@ -13,6 +13,7 @@ from config import (
     DEVICE, NUM_EPOCHS, WEIGHT_DECAY,
     EARLY_STOP_PATIENCE, LR_PATIENCE, LR_FACTOR, LR_MIN,
     CUDNN_BENCHMARK, CLASS_NAMES, CLASS_RAW_COUNTS,
+    TARGET_TRAIN_PER_CLASS, # ADDED THIS IMPORT
     MODEL_LIST, MODEL_INFO, get_output_dirs, get_hyperparams,
     USE_CLASS_WEIGHTED_LOSS, COMPARISON_DIR,
     USE_AMP, AMP_DTYPE, RANDOM_SEED,
@@ -23,40 +24,30 @@ from profiler import GPUMemoryTracker, EpochTimer, get_gpu_info
 
 
 # --- FIX SEED: kunci semua sumber angka acak sebelum training dimulai ---
-# Tanpa ini, inisialisasi bobot, urutan dropout, dan transform augmentasi acak
-# (RandomHorizontalFlip, RandomRotation, dll di dataset.py) akan berbeda setiap
-# run meskipun kode & data sama persis, sehingga hasil training (jumlah epoch
-# sampai early-stop, loss/acc per epoch) jadi tidak bisa dibandingkan apple-to-apple.
 def set_seed(seed: int = RANDOM_SEED):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    # deterministic=True + benchmark=False: training sedikit lebih lambat di GPU,
-    # tapi hasil (angka loss/acc, epoch early-stop) jadi reproducible 100%.
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
 
 # Initialize backend frameworks and verify required directories are generated
 def setup_environment(dirs: dict):
-    # NOTE: pengaturan cudnn.benchmark/deterministic SUDAH ditangani oleh set_seed().
-    # Baris ini sengaja tidak lagi memaksa deterministic=False, karena itu akan
-    # menimpa/membatalkan pengaturan reproducibility yang sudah di-set di set_seed().
     for d in [dirs["log_dir"], dirs["checkpoint_dir"], dirs["metrics_dir"], dirs["plots_dir"]]:
         Path(d).mkdir(parents=True, exist_ok=True)
 
 
-# Single source of truth for the BF16 autocast context used across train/val/inference.
-# USE_AMP is False automatically when CUDA is unavailable, in which case this context
-# manager becomes a no-op and everything runs in plain FP32 (CPU-safe by construction).
 def autocast_ctx():
     return torch.autocast(device_type="cuda", dtype=AMP_DTYPE, enabled=USE_AMP)
 
 
 # Build custom target coefficient vectors corresponding to absolute category sizing variations
 def build_class_weights() -> torch.Tensor:
-    counts = torch.tensor(CLASS_RAW_COUNTS, dtype=torch.float)
+    # UPDATED: Since the dataset is now EXACTLY TARGET_TRAIN_PER_CLASS (400) for all classes,
+    # the weights naturally balance out to be perfectly uniform.
+    counts = torch.tensor([TARGET_TRAIN_PER_CLASS] * len(CLASS_NAMES), dtype=torch.float)
     weights = 1.0 / counts
     weights = weights / weights.sum()
     return weights.to(DEVICE)
@@ -159,8 +150,6 @@ def maybe_unfreeze(model, model_name: str, epoch: int, base_lr: float):
 
 # Run absolute optimization, tracking and logging histories for a single architecture
 def train_single_model(model_name: str) -> dict:
-    # --- FIX SEED: seed ulang tiap kali mulai training 1 arsitektur, supaya urutan
-    # inisialisasi bobot & augmentasi konsisten walau dijalankan resume/terpisah per model.
     set_seed()
 
     dirs = get_output_dirs(model_name)
@@ -175,15 +164,15 @@ def train_single_model(model_name: str) -> dict:
     print(f"[INFO] Mixed Precision: {'BF16 autocast (CUDA)' if USE_AMP else 'FP32 (CPU fallback)'}")
     print(f"======================================================================")
 
-    # --- FIX: build_model sebelumnya dipanggil 2x berturut-turut (baris kedua
-    # menimpa hasil pertama secara sia-sia, buang waktu + memori). Sekarang cukup 1x.
     model = build_model(model_name)
     get_model_summary(model)
 
     params_m = sum(p.numel() for p in model.parameters()) / 1000000.0
     flops_g = {"resnet50": 4.14, "mobilenet": 0.06, "vit": 17.58}.get(model_name, 0.0)
     inf_ms = benchmark_inference(model)
-    dataset_state_current = {"classes": CLASS_NAMES, "counts": CLASS_RAW_COUNTS}
+    
+    # UPDATED: Track dataset state strictly by the forced augmentation amount
+    dataset_state_current = {"classes": CLASS_NAMES, "counts": [TARGET_TRAIN_PER_CLASS] * len(CLASS_NAMES)}
     dataset_changed = False
     result_path = os.path.join(dirs["metrics_dir"], "train_result.json")
 

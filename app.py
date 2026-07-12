@@ -16,30 +16,30 @@ import numpy as np
 import cv2
 from torchvision import transforms
 
-# --- Import YOLO dari ultralytics ---
+# --- Import YOLO from ultralytics ---
 from ultralytics import YOLO
 
-# Import variabel YOLO dari config
+# Import YOLO variables from config
 from config import MODEL_LIST, DEVICE, CLASS_NAMES, NUM_CLASSES, get_output_dirs, YOLO_WEIGHTS_PATH, YOLO_CONF_THRESHOLD
 from model import build_model
 
 app = Flask(__name__)
 
-# Memuat 3 model klasifikasi
+# Load 3 classification models
 loaded_models = {}
 output_dirs = get_output_dirs(MODEL_LIST[0])  # Helper
 
-print(f"Menggunakan Device: {DEVICE}")
+print(f"Using Device: {DEVICE}")
 for m_name in MODEL_LIST:
     dirs = get_output_dirs(m_name)
     checkpoint_path = dirs["best_model_path"]
     if os.path.exists(checkpoint_path):
         try:
-            # FIX: build_model hanya menerima 1 argumen (model_name)
+            # FIX: build_model only accepts 1 argument (model_name)
             model = build_model(m_name)
             checkpoint = torch.load(checkpoint_path, map_location=DEVICE, weights_only=False)
 
-            # --- FIX 1: PENCOCOKAN KEY CHECKPOINT ---
+            # --- FIX 1: CHECKPOINT KEY MATCHING ---
             if "model_state" in checkpoint:
                 model.load_state_dict(checkpoint["model_state"])
             elif "model_state_dict" in checkpoint:
@@ -50,20 +50,20 @@ for m_name in MODEL_LIST:
             model.to(DEVICE)
             model.eval()
 
-            # --- FIX 2: PENCEGAHAN VRAM LEAK PADA SALIENCY MAP ---
-            # Matikan gradien untuk semua bobot agar hemat memori saat inferensi
+            # --- FIX 2: PREVENTION OF VRAM LEAK ON SALIENCY MAP ---
+            # Disable gradients for all weights to save memory during inference
             for param in model.parameters():
                 param.requires_grad = False
 
             loaded_models[m_name] = model
-            print(f"Berhasil memuat model klasifikasi: {m_name}")
+            print(f"Successfully loaded classification model: {m_name}")
         except Exception as e:
-            print(f"Gagal memuat model klasifikasi {m_name}: {str(e)}")
+            print(f"Failed to load classification model {m_name}: {str(e)}")
     else:
-        print(f"File checkpoint tidak ditemukan untuk {m_name} di {checkpoint_path}")
+        print(f"Checkpoint file not found for {m_name} at {checkpoint_path}")
 
-# --- INISIALISASI MODEL YOLO11 DARI FOLDER WEIGHT (Via Config) ---
-print(f"Memuat model YOLO11 dari: {YOLO_WEIGHTS_PATH}")
+# --- INITIALIZE YOLO11 MODEL FROM WEIGHT FOLDER (Via Config) ---
+print(f"Loading YOLO11 model from: {YOLO_WEIGHTS_PATH}")
 yolo_model = YOLO(YOLO_WEIGHTS_PATH)
 
 transform = transforms.Compose([
@@ -85,9 +85,9 @@ def check_green_ratio(img_bgr):
 
 
 def draw_yolo_box(img_bgr, x1, y1, x2, y2, label="YOLO: Area Crop"):
-    """Menggambar kotak bounding box merah + label pada gambar PENUH (bukan hasil crop)."""
+    """Draw red bounding box + label on the FULL image (not the cropped result)."""
     annotated = img_bgr.copy()
-    color = (0, 0, 255)  # merah (format BGR)
+    color = (0, 0, 255)  # red (BGR format)
     h, w = img_bgr.shape[:2]
     thickness = max(2, int(min(h, w) / 200))
 
@@ -138,7 +138,7 @@ def status():
 def predict():
     if not loaded_models:
         return jsonify({
-            "global_status": {"accepted": False, "ood_reason": "Kesalahan: Belum ada model klasifikasi yang siap."},
+            "global_status": {"accepted": False, "ood_reason": "Error: No classification models are ready."},
             "models": {}
         }), 500
 
@@ -149,11 +149,11 @@ def predict():
     original_img_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
     # -----------------------------------------------------------------
-    # DETEKSI AREA DAUN MENGGUNAKAN YOLO11
-    # -> Menghasilkan 2 gambar terpisah:
-    #    1. annotated_np : gambar PENUH + kotak merah (untuk ditampilkan, Tahap 1)
-    #    2. img_np       : hasil CROP dekat area itu (untuk ditampilkan Tahap 2,
-    #                       dan juga jadi input ke model klasifikasi)
+    # DETECT LEAF AREA USING YOLO11
+    # -> Generates 2 separate images:
+    #    1. annotated_np : FULL image + red box (for display, Stage 1)
+    #    2. img_np       : CROPPED result near that area (for display Stage 2,
+    #                       and also used as input for the classification model)
     # -----------------------------------------------------------------
     yolo_results = yolo_model(original_img_np, conf=YOLO_CONF_THRESHOLD, verbose=False)
     boxes = yolo_results[0].boxes
@@ -165,23 +165,23 @@ def predict():
         x1, y1, x2, y2 = map(int, box)
         cropped_np = original_img_np[y1:y2, x1:x2]
 
-        # --- FIX 3: PENCEGAHAN CRASH OPENCV (ZERO-DIMENSION) ---
+        # --- FIX 3: PREVENT OPENCV CRASH (ZERO-DIMENSION) ---
         if cropped_np.size == 0:
             img_np = original_img_np.copy()
-            yolo_status = "Daun terdeteksi tapi dimensi tidak valid. Menggunakan gambar penuh."
+            yolo_status = "Leaf detected but dimensions are invalid. Using full image."
         else:
             img_np = cropped_np
             annotated_np = draw_yolo_box(original_img_np, x1, y1, x2, y2)
-            yolo_status = f"Daun terdeteksi di koordinat ({x1}, {y1}) hingga ({x2}, {y2})."
+            yolo_status = f"Leaf detected at coordinates ({x1}, {y1}) to ({x2}, {y2})."
     else:
         img_np = original_img_np.copy()
-        yolo_status = "Daun tidak terdeteksi oleh YOLO11. Menggunakan gambar penuh sebagai fallback."
+        yolo_status = "Leaf not detected by YOLO11. Using full image as fallback."
 
-    # Gambar 1: gambar penuh + kotak merah (Tahap 1: Deteksi)
+    # Image 1: full image + red box (Stage 1: Detection)
     _, annotated_buffer = cv2.imencode('.jpg', annotated_np)
     annotated_b64 = f"data:image/jpeg;base64,{base64.b64encode(annotated_buffer).decode('utf-8')}"
 
-    # Gambar 2: hasil crop dekat (Tahap 2: Fokus Area) -> juga input klasifikasi
+    # Image 2: close-up crop result (Stage 2: Area Focus) -> also classification input
     _, crop_buffer = cv2.imencode('.jpg', img_np)
     cropped_b64 = f"data:image/jpeg;base64,{base64.b64encode(crop_buffer).decode('utf-8')}"
     # -----------------------------------------------------------------
@@ -191,7 +191,7 @@ def predict():
         return jsonify({
             "global_status": {
                 "accepted": False,
-                "ood_reason": f"Gambar ditolak. Komponen warna hijau pada objek hanya {green_ratio*100:.1f}% (Minimal 15%)."
+                "ood_reason": f"Image rejected. Green color component on the object is only {green_ratio*100:.1f}% (Minimum 15%)."
             },
             "annotated_image": annotated_b64,
             "cropped_image": cropped_b64,
@@ -248,12 +248,12 @@ def predict():
         if avg_confidence < 0.25:
             response_data["global_status"] = {
                 "accepted": False,
-                "ood_reason": "Gambar ditolak. Rata-rata tingkat keyakinan model klasifikasi terlalu rendah."
+                "ood_reason": "Image rejected. Average classification model confidence is too low."
             }
         else:
             response_data["global_status"] = {"accepted": True}
     else:
-        response_data["global_status"] = {"accepted": False, "ood_reason": "Proses inferensi klasifikasi gagal."}
+        response_data["global_status"] = {"accepted": False, "ood_reason": "Classification inference process failed."}
 
     return jsonify(response_data)
 

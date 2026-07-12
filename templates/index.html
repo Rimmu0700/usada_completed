@@ -1,187 +1,234 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Identifikasi Spesies Daun Obat</title>
+    <title>Medicinal Plant Leaf Species Identification System</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .main-card { border: none; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-        .preview-box { width: 100%; height: 220px; border: 2px dashed #cbd5e1; border-radius: 10px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #fff; position: relative; }
-        .preview-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
-        .model-card { border-left: 5px solid #2ecc71; background: #fff; transition: transform 0.2s; }
-        .model-card:hover { transform: translateY(-2px); }
-        .progress { height: 12px; border-radius: 6px; }
+        body {
+            background-color: #f4f7f6;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .main-card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        }
+
+        .preview-box {
+            width: 100%;
+            height: 220px;
+            border: 2px dashed #cbd5e1;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background: #fff;
+            position: relative;
+        }
+
+        .preview-box img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .model-card {
+            border-left: 5px solid #2ecc71;
+            background: #fff;
+            transition: transform 0.2s;
+        }
+
+        .model-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .progress {
+            height: 12px;
+            border-radius: 6px;
+        }
     </style>
 </head>
+
 <body>
 
-<div class="container py-5">
-    <div class="text-center mb-5">
-        <h1 class="fw-bold text-success"><i class="fa-solid fa-leaf me-2"></i>Klasifikasi Spesies Daun Obat</h1>
-        <p class="text-muted">Deteksi Area dengan YOLO11 & Prediksi Paralel dengan MobileNet, ResNet, dan ViT</p>
-    </div>
+    <div class="container py-5">
+        <div class="text-center mb-5">
+            <h1 class="fw-bold text-success"><i class="fa-solid fa-leaf me-2"></i>Medicinal Leaf Species Classification
+            </h1>
+            <p class="text-muted">Region Detection with YOLO11 and Parallel Classification Using MobileNet, ResNet, and
+                Vision Transformer (ViT)</p>
+        </div>
 
-    <div class="card main-card p-4 bg-white mb-4">
-        <div class="row g-4">
-            <div class="col-md-4">
-                <h5 class="fw-semibold mb-3"><i class="fa-solid fa-image me-2 text-primary"></i>Unggah Gambar Pengujian</h5>
-                <div class="mb-3">
-                    <input class="form-file-input form-control" type="file" id="imageInput" accept="image/*">
+        <div class="card main-card p-4 bg-white mb-4">
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <h5 class="fw-semibold mb-3"><i class="fa-solid fa-image me-2 text-primary"></i>Upload Test Image
+                    </h5>
+                    <div class="mb-3">
+                        <input class="form-file-input form-control" type="file" id="imageInput" accept="image/*">
+                    </div>
+                    <div class="preview-box">
+                        <img id="inputPreview" src="" alt="" class="d-none">
+                        <div id="uploadPlaceholder" class="text-center text-muted">
+                            <i class="fa-solid fa-cloud-arrow-up fa-3x mb-2 text-secondary"></i>
+                            <p class="mb-0">Select a medicinal plant leaf image file</p>
+                        </div>
+                    </div>
+                    <button id="btnAnalyze" class="btn btn-success w-100 mt-3 py-2 fw-bold d-none">
+                        <i class="fa-solid fa-microscope me-2"></i>Start System Analysis
+                    </button>
                 </div>
-                <div class="preview-box">
-                    <img id="inputPreview" src="" alt="" class="d-none">
-                    <div id="uploadPlaceholder" class="text-center text-muted">
-                        <i class="fa-solid fa-cloud-arrow-up fa-3x mb-2 text-secondary"></i>
-                        <p class="mb-0">Pilih file gambar daun tanaman obat</p>
+
+                <div class="col-md-4">
+                    <h5 class="fw-semibold mb-3"><i class="fa-solid fa-vector-square me-2 text-warning"></i>Step 1: Leaf
+                        Location Detection (YOLO11)</h5>
+                    <div class="preview-box">
+                        <img id="yoloAnnotatedPreview" src="" alt="" class="d-none">
+                        <div id="yoloAnnotatedPlaceholder" class="text-center text-muted">
+                            <i class="fa-solid fa-vector-square fa-3x mb-2 text-secondary"></i>
+                            <p class="mb-0">Original image with detection boxes will appear here</p>
+                        </div>
+                    </div>
+                    <div class="alert alert-info mt-3 py-2" id="yoloStatusText" style="font-size: 0.85rem;">
+                        <i class="fa-solid fa-circle-info me-2"></i>Waiting for image input to be processed...
                     </div>
                 </div>
-                <button id="btnAnalyze" class="btn btn-success w-100 mt-3 py-2 fw-bold d-none">
-                    <i class="fa-solid fa-microscope me-2"></i>Mulai Analisis Sistem
-                </button>
-            </div>
 
-            <div class="col-md-4">
-                <h5 class="fw-semibold mb-3"><i class="fa-solid fa-vector-square me-2 text-warning"></i>Tahap 1: Deteksi Lokasi Daun (YOLO11)</h5>
-                <div class="preview-box">
-                    <img id="yoloAnnotatedPreview" src="" alt="" class="d-none">
-                    <div id="yoloAnnotatedPlaceholder" class="text-center text-muted">
-                        <i class="fa-solid fa-vector-square fa-3x mb-2 text-secondary"></i>
-                        <p class="mb-0">Gambar asli dengan kotak deteksi akan tampil di sini</p>
-                    </div>
-                </div>
-                <div class="alert alert-info mt-3 py-2" id="yoloStatusText" style="font-size: 0.85rem;">
-                    <i class="fa-solid fa-circle-info me-2"></i>Menunggu input gambar diproses...
-                </div>
-            </div>
-
-            <div class="col-md-4">
-                <h5 class="fw-semibold mb-3"><i class="fa-solid fa-crop-simple me-2 text-primary"></i>Tahap 2: Hasil Crop Area Fokus</h5>
-                <div class="preview-box">
-                    <img id="yoloCropPreview" src="" alt="" class="d-none">
-                    <div id="yoloPlaceholder" class="text-center text-muted">
-                        <i class="fa-solid fa-image fa-3x mb-2 text-secondary"></i>
-                        <p class="mb-0">Potongan daun yang diproses model akan tampil di sini</p>
+                <div class="col-md-4">
+                    <h5 class="fw-semibold mb-3"><i class="fa-solid fa-crop-simple me-2 text-primary"></i>Step 2: Focus
+                        Area Crop Results</h5>
+                    <div class="preview-box">
+                        <img id="yoloCropPreview" src="" alt="" class="d-none">
+                        <div id="yoloPlaceholder" class="text-center text-muted">
+                            <i class="fa-solid fa-image fa-3x mb-2 text-secondary"></i>
+                            <p class="mb-0">Cropped leaf images processed by the model will appear here</p>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
+
+        <div id="loadingIndicator" class="text-center d-none my-4">
+            <div class="spinner-border text-success" role="status" style="width: 3rem; height: 3rem;"></div>
+            <p class="mt-2 fw-semibold text-muted">YOLO is cropping objects and 3 classification models are
+                evaluating...</p>
+        </div>
+
+        <div id="errorAlert" class="alert alert-danger d-none main-card" role="alert">
+            <h4 class="alert-heading fw-bold"><i class="fa-solid fa-triangle-exclamation me-2"></i>Image Rejected by
+                System!</h4>
+            <p id="errorMsg" class="mb-0"></p>
+        </div>
+
+        <div id="resultsSection" class="d-none">
+            <h4 class="fw-bold text-dark mb-3"><i class="fa-solid fa-chart-bar me-2 text-success"></i>Step 3: Leaf
+                Species Prediction Results</h4>
+            <div class="row g-4" id="modelsGrid"></div>
+        </div>
     </div>
 
-    <div id="loadingIndicator" class="text-center d-none my-4">
-        <div class="spinner-border text-success" role="status" style="width: 3rem; height: 3rem;"></div>
-        <p class="mt-2 fw-semibold text-muted">YOLO sedang memotong objek & 3 Model Klasifikasi sedang mengevaluasi...</p>
-    </div>
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const inputPreview = document.getElementById('inputPreview');
+        const uploadPlaceholder = document.getElementById('uploadPlaceholder');
+        const btnAnalyze = document.getElementById('btnAnalyze');
 
-    <div id="errorAlert" class="alert alert-danger d-none main-card" role="alert">
-        <h4 class="alert-heading fw-bold"><i class="fa-solid fa-triangle-exclamation me-2"></i>Gambar Ditolak Sistem!</h4>
-        <p id="errorMsg" class="mb-0"></p>
-    </div>
+        const yoloAnnotatedPreview = document.getElementById('yoloAnnotatedPreview');
+        const yoloAnnotatedPlaceholder = document.getElementById('yoloAnnotatedPlaceholder');
+        const yoloCropPreview = document.getElementById('yoloCropPreview');
+        const yoloPlaceholder = document.getElementById('yoloPlaceholder');
+        const yoloStatusText = document.getElementById('yoloStatusText');
 
-    <div id="resultsSection" class="d-none">
-        <h4 class="fw-bold text-dark mb-3"><i class="fa-solid fa-chart-bar me-2 text-success"></i>Tahap 3: Hasil Prediksi Spesies Daun</h4>
-        <div class="row g-4" id="modelsGrid"></div>
-    </div>
-</div>
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const errorAlert = document.getElementById('errorAlert');
+        const errorMsg = document.getElementById('errorMsg');
+        const resultsSection = document.getElementById('resultsSection');
+        const modelsGrid = document.getElementById('modelsGrid');
 
-<script>
-    const imageInput = document.getElementById('imageInput');
-    const inputPreview = document.getElementById('inputPreview');
-    const uploadPlaceholder = document.getElementById('uploadPlaceholder');
-    const btnAnalyze = document.getElementById('btnAnalyze');
+        let base64Image = "";
 
-    const yoloAnnotatedPreview = document.getElementById('yoloAnnotatedPreview');
-    const yoloAnnotatedPlaceholder = document.getElementById('yoloAnnotatedPlaceholder');
-    const yoloCropPreview = document.getElementById('yoloCropPreview');
-    const yoloPlaceholder = document.getElementById('yoloPlaceholder');
-    const yoloStatusText = document.getElementById('yoloStatusText');
+        imageInput.addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            if (!file) return;
 
-    const loadingIndicator = document.getElementById('loadingIndicator');
-    const errorAlert = document.getElementById('errorAlert');
-    const errorMsg = document.getElementById('errorMsg');
-    const resultsSection = document.getElementById('resultsSection');
-    const modelsGrid = document.getElementById('modelsGrid');
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                base64Image = event.target.result;
+                inputPreview.src = base64Image;
+                inputPreview.classList.remove('d-none');
+                uploadPlaceholder.classList.add('d-none');
+                btnAnalyze.classList.remove('d-none');
 
-    let base64Image = "";
+                // Reset Output Components
+                resultsSection.classList.add('d-none');
+                errorAlert.classList.add('d-none');
 
-    imageInput.addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
+                yoloAnnotatedPreview.classList.add('d-none');
+                yoloAnnotatedPlaceholder.classList.remove('d-none');
 
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            base64Image = event.target.result;
-            inputPreview.src = base64Image;
-            inputPreview.classList.remove('d-none');
-            uploadPlaceholder.classList.add('d-none');
-            btnAnalyze.classList.remove('d-none');
+                yoloCropPreview.classList.add('d-none');
+                yoloPlaceholder.classList.remove('d-none');
 
-            // Reset komponen output
+                yoloStatusText.innerHTML = '<i class="fa-solid fa-circle-info me-2"></i>Image ready for processing. Please click the analyze button.';
+            };
+            reader.readAsDataURL(file);
+        });
+
+        btnAnalyze.addEventListener('click', async function () {
+            loadingIndicator.classList.remove('d-none');
             resultsSection.classList.add('d-none');
             errorAlert.classList.add('d-none');
 
-            yoloAnnotatedPreview.classList.add('d-none');
-            yoloAnnotatedPlaceholder.classList.remove('d-none');
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: base64Image })
+                });
+                const data = await response.json();
+                loadingIndicator.classList.add('d-none');
 
-            yoloCropPreview.classList.add('d-none');
-            yoloPlaceholder.classList.remove('d-none');
+                // Stage 1: Full Image with Detection Bounding Box
+                if (data.annotated_image) {
+                    yoloAnnotatedPreview.src = data.annotated_image;
+                    yoloAnnotatedPreview.classList.remove('d-none');
+                    yoloAnnotatedPlaceholder.classList.add('d-none');
+                }
 
-            yoloStatusText.innerHTML = '<i class="fa-solid fa-circle-info me-2"></i>Gambar siap diproses. Silakan klik tombol analisis.';
-        };
-        reader.readAsDataURL(file);
-    });
+                // Stage 2: Focus Area Crop Results
+                if (data.cropped_image) {
+                    yoloCropPreview.src = data.cropped_image;
+                    yoloCropPreview.classList.remove('d-none');
+                    yoloPlaceholder.classList.add('d-none');
+                }
 
-    btnAnalyze.addEventListener('click', async function() {
-        loadingIndicator.classList.remove('d-none');
-        resultsSection.classList.add('d-none');
-        errorAlert.classList.add('d-none');
+                if (data.yolo_status) {
+                    yoloStatusText.innerHTML = `<i class="fa-solid fa-square-check text-success me-2"></i><strong>YOLO11:</strong> ${data.yolo_status}`;
+                }
 
-        try {
-            const response = await fetch('/predict', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: base64Image })
-            });
-            const data = await response.json();
-            loadingIndicator.classList.add('d-none');
+                // Image Rejection Validation
+                if (data.global_status && data.global_status.accepted === false) {
+                    errorMsg.innerText = data.global_status.ood_reason;
+                    errorAlert.classList.remove('d-none');
+                    return;
+                }
 
-            // Tahap 1: gambar penuh + kotak deteksi
-            if (data.annotated_image) {
-                yoloAnnotatedPreview.src = data.annotated_image;
-                yoloAnnotatedPreview.classList.remove('d-none');
-                yoloAnnotatedPlaceholder.classList.add('d-none');
-            }
+                // Render Outputs from the Three Models
+                modelsGrid.innerHTML = "";
+                for (const [modelName, details] of Object.entries(data.models)) {
+                    let probListHTML = "";
+                    const sortedProbs = Object.entries(details.class_probs).sort((a, b) => b[1] - a[1]);
 
-            // Tahap 2: hasil crop dekat
-            if (data.cropped_image) {
-                yoloCropPreview.src = data.cropped_image;
-                yoloCropPreview.classList.remove('d-none');
-                yoloPlaceholder.classList.add('d-none');
-            }
-
-            if (data.yolo_status) {
-                yoloStatusText.innerHTML = `<i class="fa-solid fa-square-check text-success me-2"></i><strong>YOLO11:</strong> ${data.yolo_status}`;
-            }
-
-            // Validasi Penolakan Gambar
-            if (data.global_status && data.global_status.accepted === false) {
-                errorMsg.innerText = data.global_status.ood_reason;
-                errorAlert.classList.remove('d-none');
-                return;
-            }
-
-            // Render Output Tiga Model
-            modelsGrid.innerHTML = "";
-            for (const [modelName, details] of Object.entries(data.models)) {
-                let probListHTML = "";
-                const sortedProbs = Object.entries(details.class_probs).sort((a,b) => b[1] - a[1]);
-
-                sortedProbs.forEach(([className, val]) => {
-                    const pct = (val * 100).toFixed(1);
-                    const isSelected = className === details.predicted;
-                    probListHTML += `
+                    sortedProbs.forEach(([className, val]) => {
+                        const pct = (val * 100).toFixed(1);
+                        const isSelected = className === details.predicted;
+                        probListHTML += `
                         <div class="mb-2">
                             <div class="d-flex justify-content-between small ${isSelected ? 'fw-bold text-success' : 'text-muted'}">
                                 <span>${className} ${isSelected ? '<i class="fa-solid fa-circle-check"></i>' : ''}</span>
@@ -191,9 +238,9 @@
                                 <div class="progress-bar ${isSelected ? 'bg-success' : 'bg-secondary opacity-50'}" role="progressbar" style="width: ${pct}%"></div>
                             </div>
                         </div>`;
-                });
+                    });
 
-                const cardHTML = `
+                    const cardHTML = `
                     <div class="col-lg-4 col-md-6">
                         <div class="card h-100 model-card p-3 shadow-sm">
                             <div class="d-flex justify-content-between align-items-center border-b pb-2 mb-3">
@@ -201,11 +248,11 @@
                                 <span class="badge bg-light text-dark border">${details.inference_ms} ms</span>
                             </div>
                             <div class="mb-3 text-center bg-light p-2 rounded">
-                                <small class="text-muted d-block">Saliency Map (Fokus Fitur)</small>
+                                <small class="text-muted d-block">Saliency Map (Feature Focus)</small>
                                 <img src="${details.heatmap_b64 || ''}" class="img-fluid rounded mt-1 border" style="max-height:140px; object-fit:contain;">
                             </div>
                             <div class="mb-3">
-                                <small class="text-muted">Hasil Klasifikasi Terpilih:</small>
+                                <small class="text-muted">Selected Classification Result:</small>
                                 <div class="h5 fw-bold text-success">${details.predicted}</div>
                                 <small class="text-muted">Confidence: ${(details.confidence * 100).toFixed(2)}% | Entropy: ${details.entropy.toFixed(3)}</small>
                             </div>
@@ -213,17 +260,18 @@
                             <div>${probListHTML}</div>
                         </div>
                     </div>`;
-                modelsGrid.innerHTML += cardHTML;
-            }
-            resultsSection.classList.remove('d-none');
+                    modelsGrid.innerHTML += cardHTML;
+                }
+                resultsSection.classList.remove('d-none');
 
-        } catch (error) {
-            loadingIndicator.classList.add('d-none');
-            errorMsg.innerText = "Gagal terhubung ke server backend aplikasi.";
-            errorAlert.classList.remove('d-none');
-        }
-    });
-</script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+            } catch (error) {
+                loadingIndicator.classList.add('d-none');
+                errorMsg.innerText = "Unable to connect to the application's backend server.";
+                errorAlert.classList.remove('d-none');
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
+
 </html>
