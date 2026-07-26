@@ -3,8 +3,8 @@
     "display_name": "ViT-Base/16",
     "image_size": "224x224",
     "num_classes": 17,
-    "test_accuracy": 0.995215,
-    "test_f1_macro": 0.995294,
+    "test_accuracy": 0.985075,
+    "test_f1_macro": 0.984745,
     "val_stats": {
         "best_acc": 1.0,
         "avg_acc": 0.9864,
@@ -394,13 +394,13 @@
         ]
     },
     "inference_time_ms": {
-        "mean_ms": 23.1,
-        "std_ms": 0.397,
-        "min_ms": 22.422,
-        "max_ms": 24.57,
+        "mean_ms": 7.179,
+        "std_ms": 1.603,
+        "min_ms": 6.758,
+        "max_ms": 17.203,
         "n_runs": 100
     },
-    "gpu_vram_peak_mb": 346.07,
+    "gpu_vram_peak_mb": 347.07,
     "flops": {
         "flops_raw": 11285687552.0,
         "flops_str": "11.286G",
@@ -411,13 +411,13 @@
     },
     "gpu_info": {
         "available": true,
-        "device_name": "NVIDIA GeForce RTX 2050",
-        "cuda_version": "13.0",
-        "cudnn_version": 92000,
-        "total_vram_gb": 3.68,
-        "sm_count": 16,
-        "cuda_cores_est": 2048,
-        "compute_cap": "8.6",
-        "pytorch_version": "2.12.1+cu130"
+        "device_name": "NVIDIA GeForce RTX 4060",
+        "cuda_version": "12.1",
+        "cudnn_version": 90100,
+        "total_vram_gb": 8.0,
+        "sm_count": 24,
+        "cuda_cores_est": 3072,
+        "compute_cap": "8.9",
+        "pytorch_version": "2.5.1+cu121"
     }
 }
