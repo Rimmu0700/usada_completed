@@ -25,7 +25,122 @@ from model import build_model
 
 app = Flask(__name__)
 
+
+# =====================================================================
+# GRAD-CAM (replaces the old vanilla saliency map)
+#
+# Selvaraju, R. R., Cogswell, M., Das, A., Vedantam, R., Parikh, D., &
+# Batra, D. (2017). Grad-CAM: Visual Explanations from Deep Networks via
+# Gradient-Based Localization. IEEE ICCV, 618-626.
+#
+# Works for CNN backbones (ResNet50, MobileNetV3-Small) directly, and for
+# ViT-Base/16 via vit_reshape_transform, which turns its token embeddings
+# into a spatial grid so the same CAM math applies to all three models.
+#
+# Safe to use even though every model.parameters() below gets
+# requires_grad=False for memory savings — __call__() makes the INPUT
+# tensor require grad instead, the same way the old saliency function did,
+# so gradients still reach the hooked layer regardless of frozen weights.
+# =====================================================================
+
+class GradCAM:
+    def __init__(self, model, target_layer, reshape_transform=None):
+        self.model = model
+        self.reshape_transform = reshape_transform
+        self.gradients = None
+        self.activations = None
+        target_layer.register_forward_hook(self._save_activation)
+        target_layer.register_full_backward_hook(self._save_gradient)
+
+    def _save_activation(self, module, inputs, output):
+        activation = output
+        if self.reshape_transform is not None:
+            activation = self.reshape_transform(activation)
+        self.activations = activation.detach()
+
+    def _save_gradient(self, module, grad_input, grad_output):
+        grad = grad_output[0]
+        if self.reshape_transform is not None:
+            grad = self.reshape_transform(grad)
+        self.gradients = grad.detach()
+
+    def __call__(self, input_tensor, target_class):
+        if not input_tensor.requires_grad:
+            input_tensor.requires_grad_()
+
+        output = self.model(input_tensor)
+        score = output[0, target_class]
+        score.backward()
+
+        weights = self.gradients.mean(dim=(2, 3), keepdim=True)
+        cam = F.relu((weights * self.activations).sum(dim=1, keepdim=True))
+        cam = F.interpolate(
+            cam, size=input_tensor.shape[-2:], mode="bilinear", align_corners=False
+        )
+        cam = cam.squeeze().detach().cpu().numpy()
+        cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
+        return cam
+
+
+def vit_reshape_transform(tensor, grid_size=14):
+    """(B, N+1, C) token embeddings -> (B, C, H, W) grid, dropping the CLS
+    token. grid_size = image_size / patch_size = 224/16 = 14 for the 224x224
+    input used in `transform` below — change if config.py trains at a
+    different resolution."""
+    patch_tokens = tensor[:, 1:, :]
+    b, n, c = patch_tokens.shape
+    result = patch_tokens.reshape(b, grid_size, grid_size, c)
+    return result.permute(0, 3, 1, 2)
+
+
+def infer_arch_name(m_name):
+    """Maps a MODEL_LIST entry to one of the three architecture keys below,
+    by substring match (case-insensitive). Edit directly if your MODEL_LIST
+    strings don't contain these keywords."""
+    name = m_name.lower()
+    if "resnet" in name:
+        return "resnet50"
+    elif "mobilenet" in name:
+        return "mobilenetv3_small"
+    elif "vit" in name:
+        return "vit_base_16"
+    raise ValueError(f"Can't infer architecture from model name '{m_name}'")
+
+
+def get_gradcam(model, arch_name):
+    """Target layers assume standard torchvision structure. Replacing only
+    the classifier head in build_model() should NOT affect these paths —
+    that happens after these layers. print(model) once if any architecture
+    fails to hook correctly."""
+    if arch_name == "resnet50":
+        return GradCAM(model, target_layer=model.layer4[-1])
+    elif arch_name == "mobilenetv3_small":
+        return GradCAM(model, target_layer=model.features[-1])
+    elif arch_name == "vit_base_16":
+        return GradCAM(
+            model,
+            target_layer=model.encoder.layers[-1],
+            reshape_transform=vit_reshape_transform,
+        )
+    else:
+        raise ValueError(f"Unknown architecture: {arch_name!r}")
+
+
+def generate_gradcam_map(gradcam, input_tensor, target_class, img_bgr):
+    """Drop-in replacement for the old generate_saliency_map(). Same base64
+    JPEG return format and same BGR overlay convention — only the call
+    site inside /predict needed to change."""
+    cam = gradcam(input_tensor, target_class)
+    cam_resized = cv2.resize(cam, (img_bgr.shape[1], img_bgr.shape[0]))
+    heatmap = cv2.applyColorMap(np.uint8(255 * cam_resized), cv2.COLORMAP_JET)
+    overlay = cv2.addWeighted(img_bgr, 0.6, heatmap, 0.4, 0)
+    _, buffer = cv2.imencode('.jpg', overlay)
+    return f"data:image/jpeg;base64,{base64.b64encode(buffer).decode('utf-8')}"
+
+
+# =====================================================================
 # Load 3 classification models
+# =====================================================================
 loaded_models = {}
 output_dirs = get_output_dirs(MODEL_LIST[0])  # Helper
 
@@ -61,6 +176,18 @@ for m_name in MODEL_LIST:
             print(f"Failed to load classification model {m_name}: {str(e)}")
     else:
         print(f"Checkpoint file not found for {m_name} at {checkpoint_path}")
+
+# --- Build one Grad-CAM wrapper per loaded model. Hooks are registered
+#     once here, NOT inside /predict — registering them per-request would
+#     accumulate hooks on every prediction and eventually leak memory /
+#     corrupt results.
+loaded_gradcams = {}
+for m_name, model in loaded_models.items():
+    try:
+        loaded_gradcams[m_name] = get_gradcam(model, infer_arch_name(m_name))
+        print(f"Grad-CAM ready for: {m_name}")
+    except Exception as e:
+        print(f"Grad-CAM setup failed for {m_name}: {str(e)} (heatmap will be skipped for this model)")
 
 # --- INITIALIZE YOLO11 MODEL FROM WEIGHT FOLDER (Via Config) ---
 print(f"Loading YOLO11 model from: {YOLO_WEIGHTS_PATH}")
@@ -100,28 +227,6 @@ def draw_yolo_box(img_bgr, x1, y1, x2, y2, label="YOLO: Area Crop"):
     cv2.rectangle(annotated, (x1, label_y1), (x1 + text_w + 12, y1), color, -1)
     cv2.putText(annotated, label, (x1 + 6, y1 - 6), font, font_scale, (255, 255, 255), 2, cv2.LINE_AA)
     return annotated
-
-
-def generate_saliency_map(model, input_tensor, target_class, img_np):
-    model.zero_grad()
-    input_tensor.requires_grad_()
-
-    output = model(input_tensor)
-    score = output[0, target_class]
-    score.backward()
-
-    saliency, _ = torch.max(input_tensor.grad.data.abs(), dim=1)
-    saliency = saliency[0].cpu().numpy()
-
-    saliency = (saliency - saliency.min()) / (saliency.max() - saliency.min() + 1e-8)
-    saliency = cv2.resize(saliency, (img_np.shape[1], img_np.shape[0]))
-    saliency = np.uint8(255 * saliency)
-
-    heatmap = cv2.applyColorMap(saliency, cv2.COLORMAP_JET)
-    overlay = cv2.addWeighted(img_np, 0.6, heatmap, 0.4, 0)
-
-    _, buffer = cv2.imencode('.jpg', overlay)
-    return f"data:image/jpeg;base64,{base64.b64encode(buffer).decode('utf-8')}"
 
 
 @app.route("/")
@@ -223,10 +328,13 @@ def predict():
         max_prob, predicted = torch.max(probs, 0)
 
         heatmap_b64 = None
-        try:
-            heatmap_b64 = generate_saliency_map(model, img_tensor, predicted.item(), img_np)
-        except Exception:
-            pass
+        if m_name in loaded_gradcams:
+            try:
+                heatmap_b64 = generate_gradcam_map(
+                    loaded_gradcams[m_name], img_tensor, predicted.item(), img_np
+                )
+            except Exception:
+                pass
 
         class_probs = {CLASS_NAMES[i]: float(probs[i]) for i in range(NUM_CLASSES)}
 
