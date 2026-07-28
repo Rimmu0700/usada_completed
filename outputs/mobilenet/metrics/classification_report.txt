@@ -1,28 +1,3 @@
-MobileNetV3-Small Medical Plant Detection
-==================================================
-Test Accuracy : 0.990050
-Test F1 Macro : 0.991164
-
-                                         precision    recall  f1-score   support
-
-Alpinia galanga(L) willd.(angiberaceae)       1.00      1.00      1.00        13
-           Antidesma bunius (L.) Spreng       1.00      1.00      1.00        13
-             Blumea balsamifera (L.) DC       1.00      1.00      1.00        11
-               Cinnamomum verum J.Presl       1.00      1.00      1.00         9
- Curcuma sylvatica vahl (Zingiberaceae)       1.00      1.00      1.00         8
-   Erythrina hypaphorus Boerl. ex Koord       1.00      0.92      0.96        13
-    Euchresta horsfieldii (Lesch.) Benn       0.94      1.00      0.97        15
-        Graptophyllum pictum (L.) Griff       1.00      1.00      1.00        11
-             Justicia gendarussa Burm.f       1.00      1.00      1.00        11
-                          Piper betle L       1.00      1.00      1.00        11
-  Symphytum officinale L.(boraginaceae)       1.00      1.00      1.00        17
-                     Tabernaemontana sp       0.93      1.00      0.97        14
-                Zingiber Purpureum Roxb       1.00      1.00      1.00        13
-               Zingiber officinale Roxb       1.00      1.00      1.00        12
-         amomum compactum sol.ex manton       1.00      0.92      0.96        12
-      anredera cordifolia (ten) steenis       1.00      1.00      1.00        11
-       plantago major L(plantaginaceae)       1.00      1.00      1.00         7
-
-                               accuracy                           0.99       201
-                              macro avg       0.99      0.99      0.99       201
-                           weighted avg       0.99      0.99      0.99       201
+version https://git-lfs.github.com/spec/v1
+oid sha256:027fe1eef591b857a025dc2b359aad32bd192c839e3e7fbe6c64dedd1afab178
+size 1875

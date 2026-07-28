@@ -1,28 +1,3 @@
-ViT-Base/16 Medical Plant Detection
-==================================================
-Test Accuracy : 0.985075
-Test F1 Macro : 0.984745
-
-                                         precision    recall  f1-score   support
-
-Alpinia galanga(L) willd.(angiberaceae)       0.93      1.00      0.96        13
-           Antidesma bunius (L.) Spreng       1.00      1.00      1.00        13
-             Blumea balsamifera (L.) DC       1.00      1.00      1.00        11
-               Cinnamomum verum J.Presl       1.00      1.00      1.00         9
- Curcuma sylvatica vahl (Zingiberaceae)       0.89      1.00      0.94         8
-   Erythrina hypaphorus Boerl. ex Koord       1.00      0.92      0.96        13
-    Euchresta horsfieldii (Lesch.) Benn       1.00      1.00      1.00        15
-        Graptophyllum pictum (L.) Griff       1.00      1.00      1.00        11
-             Justicia gendarussa Burm.f       1.00      1.00      1.00        11
-                          Piper betle L       1.00      1.00      1.00        11
-  Symphytum officinale L.(boraginaceae)       1.00      1.00      1.00        17
-                     Tabernaemontana sp       1.00      1.00      1.00        14
-                Zingiber Purpureum Roxb       1.00      0.92      0.96        13
-               Zingiber officinale Roxb       0.92      1.00      0.96        12
-         amomum compactum sol.ex manton       1.00      0.92      0.96        12
-      anredera cordifolia (ten) steenis       1.00      1.00      1.00        11
-       plantago major L(plantaginaceae)       1.00      1.00      1.00         7
-
-                               accuracy                           0.99       201
-                              macro avg       0.98      0.99      0.98       201
-                           weighted avg       0.99      0.99      0.99       201
+version https://git-lfs.github.com/spec/v1
+oid sha256:3a73d89d55d003ba351c9f3bf492653bf81d4daafeea4eb321893f7ea354aeb9
+size 1869
